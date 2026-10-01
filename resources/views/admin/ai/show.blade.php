@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-    <a href="{{ route('settings.edit') }}" class="btn btn-legal-secondary">Firm settings</a>
+    <a href="{{ route('settings.edit') }}" class="ui-btn ui-btn-ghost">Firm settings</a>
 @endsection
 
 @section('content')
@@ -30,30 +30,30 @@
     </div>
     <div class="voice-studio-panel">
         @if($fineTuner['error'] ?? null)
-            <div class="alert alert-danger">{{ $fineTuner['error'] }}</div>
+            <div class="ui-alert ui-alert-danger">{{ $fineTuner['error'] }}</div>
         @endif
 
         <form method="POST" action="{{ route('ai.finetuner.connect') }}" class="mb-0">
             @csrf
             <div class="row g-2">
                 <div class="col-12">
-                    <label class="form-label">FineTuner API key</label>
-                    <input type="password" name="api_key" class="form-control" placeholder="{{ $fineTunerKey ?: 'Bearer token from FineTuner' }}" autocomplete="off" required>
+                    <label class="ui-label">FineTuner API key</label>
+                    <input type="password" name="api_key" class="ui-field" placeholder="{{ $fineTunerKey ?: 'Bearer token from FineTuner' }}" autocomplete="off" required>
                 </div>
                 <div class="col-md-7">
-                    <label class="form-label">Workspace ID</label>
-                    <input name="workspace_id" class="form-control" value="{{ old('workspace_id', $fineTunerWorkspace) }}" required>
+                    <label class="ui-label">Workspace ID</label>
+                    <input name="workspace_id" class="ui-field" value="{{ old('workspace_id', $fineTunerWorkspace) }}" required>
                 </div>
                 <div class="col-md-5">
-                    <label class="form-label">Region</label>
-                    <select name="base_url" class="form-select">
+                    <label class="ui-label">Region</label>
+                    <select name="base_url" class="ui-field">
                         <option value="https://api.synthflow.ai/v2">Global</option>
                         <option value="https://api.us.synthflow.ai/v2">United States</option>
                         <option value="https://api.eu.synthflow.ai/v2">European Union</option>
                     </select>
                 </div>
             </div>
-            <button class="btn btn-legal-brass mt-3">{{ $fineTunerKey ? 'Update connection' : 'Connect FineTuner' }}</button>
+            <button class="ui-btn ui-btn-brass mt-3">{{ $fineTunerKey ? 'Update connection' : 'Connect FineTuner' }}</button>
         </form>
     </div>
 </section>
@@ -65,7 +65,7 @@
                 <div class="line-row">
                     <div>
                         <div class="fw-semibold">{{ $number['number'] }}</div>
-                        <div class="small text-muted">{{ $number['available'] ? 'Available for inbound' : 'Assigned' }}</div>
+                        <div class="small ui-muted">{{ $number['available'] ? 'Available for inbound' : 'Assigned' }}</div>
                     </div>
                     <x-legal.badge :tone="$number['available'] ? 'success' : 'brass'">
                         {{ $number['available'] ? 'Open' : 'In use' }}
@@ -84,7 +84,7 @@
                 <div class="line-row">
                     <div>
                         <div class="fw-semibold">{{ $agent['name'] }}</div>
-                        <div class="small text-muted">{{ $agent['phone_number'] ?: 'No number' }} · {{ $agent['description'] ?: ucfirst($agent['type']) }}</div>
+                        <div class="small ui-muted">{{ $agent['phone_number'] ?: 'No number' }} · {{ $agent['description'] ?: ucfirst($agent['type']) }}</div>
                     </div>
                     <x-legal.badge tone="navy">{{ $agent['id'] }}</x-legal.badge>
                 </div>
@@ -99,23 +99,23 @@
                     @csrf
                     <div class="row g-2 align-items-end">
                         <div class="col-md-5">
-                            <label class="form-label">Agent</label>
-                            <select name="model_id" class="form-select" required>
+                            <label class="ui-label">Agent</label>
+                            <select name="model_id" class="ui-field" required>
                                 @foreach($fineTuner['agents'] as $agent)
                                     <option value="{{ $agent['id'] }}">{{ $agent['name'] }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="col-md-5">
-                            <label class="form-label">Phone number</label>
-                            <select name="phone_number" class="form-select" required>
+                            <label class="ui-label">Phone number</label>
+                            <select name="phone_number" class="ui-field" required>
                                 @foreach($fineTuner['numbers'] as $number)
                                     <option value="{{ $number['number'] }}">{{ $number['number'] }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button class="btn btn-legal-primary w-100">Attach</button>
+                            <button class="ui-btn ui-btn-primary w-100">Attach</button>
                         </div>
                     </div>
                 </form>
@@ -176,8 +176,8 @@
 <div class="row g-3 mb-4">
     <div class="col-lg-7">
         <x-legal.card title="Recent AI call activity">
-            <div class="table-responsive">
-                <table class="table align-middle">
+            <div class="ui-table-wrap">
+                <table class="ui-table">
                     <thead>
                         <tr>
                             <th>Caller</th>
@@ -205,7 +205,7 @@
 
     <div class="col-lg-5">
         <x-legal.card title="Voice gateway">
-            <p class="small text-muted mb-2">Public Media Stream URL used in Twilio TwiML</p>
+            <p class="small ui-muted mb-2">Public Media Stream URL used in Twilio TwiML</p>
             <code class="d-block mb-3 small" style="word-break:break-all">{{ $publicWsUrl ?: 'Not configured' }}</code>
             @if(is_array($gatewayHealth))
                 <x-legal.badge :tone="($gatewayHealth['ok'] ?? false) ? 'success' : 'danger'">
@@ -215,7 +215,7 @@
                 <x-legal.badge>Health unchecked</x-legal.badge>
             @endif
             <hr>
-            <div class="small text-muted mb-2">Leads captured by AI today</div>
+            <div class="small ui-muted mb-2">Leads captured by AI today</div>
             <div class="fw-bold fs-4 text-navy" style="color:var(--navy)">{{ $aiStats['leads_today'] }}</div>
         </x-legal.card>
     </div>
@@ -228,35 +228,35 @@
                 @csrf @method('PUT')
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Receptionist name</label>
-                        <input name="receptionist_name" class="form-control" value="{{ old('receptionist_name', $firm->receptionist_name) }}">
+                        <label class="ui-label">Receptionist name</label>
+                        <input name="receptionist_name" class="ui-field" value="{{ old('receptionist_name', $firm->receptionist_name) }}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Language</label>
-                        <input name="ai_language" class="form-control" value="{{ old('ai_language', $firm->ai_language) }}">
+                        <label class="ui-label">Language</label>
+                        <input name="ai_language" class="ui-field" value="{{ old('ai_language', $firm->ai_language) }}">
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Greeting</label>
-                        <textarea name="ai_greeting" class="form-control" rows="3">{{ old('ai_greeting', $firm->ai_greeting) }}</textarea>
+                        <label class="ui-label">Greeting</label>
+                        <textarea name="ai_greeting" class="ui-field" rows="3">{{ old('ai_greeting', $firm->ai_greeting) }}</textarea>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Tone</label>
-                        <input name="ai_tone" class="form-control" value="{{ old('ai_tone', $firm->ai_tone) }}">
+                        <label class="ui-label">Tone</label>
+                        <input name="ai_tone" class="ui-field" value="{{ old('ai_tone', $firm->ai_tone) }}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Transfer number</label>
-                        <input name="transfer_number" class="form-control" value="{{ old('transfer_number', $firm->transfer_number) }}">
+                        <label class="ui-label">Transfer number</label>
+                        <input name="transfer_number" class="ui-field" value="{{ old('transfer_number', $firm->transfer_number) }}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">After-hours behavior</label>
-                        <input name="after_hours_behavior" class="form-control" value="{{ old('after_hours_behavior', $firm->after_hours_behavior) }}">
+                        <label class="ui-label">After-hours behavior</label>
+                        <input name="after_hours_behavior" class="ui-field" value="{{ old('after_hours_behavior', $firm->after_hours_behavior) }}">
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Escalation rules</label>
-                        <textarea name="ai_escalation_rules" class="form-control" rows="3">{{ old('ai_escalation_rules', $firm->ai_escalation_rules) }}</textarea>
+                        <label class="ui-label">Escalation rules</label>
+                        <textarea name="ai_escalation_rules" class="ui-field" rows="3">{{ old('ai_escalation_rules', $firm->ai_escalation_rules) }}</textarea>
                     </div>
                 </div>
-                <button class="btn btn-legal-primary mt-3">Save AI settings</button>
+                <button class="ui-btn ui-btn-primary mt-3">Save AI settings</button>
             </form>
         </x-legal.card>
     </div>
@@ -271,7 +271,7 @@
                 @foreach($tools as $tool)
                     <li class="mb-2 pb-2 border-bottom">
                         <strong style="color:var(--navy)">{{ $tool['name'] }}</strong>
-                        <div class="text-muted">{{ $tool['description'] }}</div>
+                        <div class="ui-muted">{{ $tool['description'] }}</div>
                     </li>
                 @endforeach
             </ul>

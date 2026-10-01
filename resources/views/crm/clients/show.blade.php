@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-<a class="btn btn-legal-secondary" href="{{ route('clients.edit', $client) }}">Edit</a>
+<a class="ui-btn ui-btn-ghost" href="{{ route('clients.edit', $client) }}">Edit</a>
 @endsection
 
 @section('content')
@@ -50,7 +50,7 @@
                 <div class="legal-list-item">
                     <div>
                         <div class="fw-semibold">{{ $lead->name ?: $lead->phone }}</div>
-                        <div class="small text-muted">{{ str_replace('_', ' ', $lead->status?->value ?? '') }}</div>
+                        <div class="small ui-muted">{{ str_replace('_', ' ', $lead->status?->value ?? '') }}</div>
                     </div>
                     <a href="{{ route('leads.show', $lead) }}">Open</a>
                 </div>
@@ -62,8 +62,8 @@
 
     <div class="col-12" id="appointments">
         <x-legal.card title="Appointments">
-            <div class="table-responsive">
-                <table class="table align-middle">
+            <div class="ui-table-wrap">
+                <table class="ui-table">
                     <thead>
                         <tr>
                             <th>When</th>

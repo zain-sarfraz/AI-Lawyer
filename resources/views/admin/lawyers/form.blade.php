@@ -17,16 +17,16 @@
                 <p>Creates a lawyer user for the firm workspace.</p>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Name</label>
-                        <input name="name" class="form-control" required>
+                        <label class="ui-label">Name</label>
+                        <input name="name" class="ui-field" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" required>
+                        <label class="ui-label">Email</label>
+                        <input type="email" name="email" class="ui-field" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" placeholder="Default: password">
+                        <label class="ui-label">Password</label>
+                        <input type="password" name="password" class="ui-field" placeholder="Default: password">
                     </div>
                 </div>
             </div>
@@ -37,32 +37,32 @@
             <p>Title, status, and practice services offered.</p>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Title</label>
-                    <input name="title" class="form-control" value="{{ old('title', $lawyer->title) }}" placeholder="Partner, Associate…">
+                    <label class="ui-label">Title</label>
+                    <input name="title" class="ui-field" value="{{ old('title', $lawyer->title) }}" placeholder="Partner, Associate…">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Timezone</label>
-                    <input name="timezone" class="form-control" value="{{ old('timezone', $lawyer->timezone) }}" placeholder="America/New_York">
+                    <label class="ui-label">Timezone</label>
+                    <input name="timezone" class="ui-field" value="{{ old('timezone', $lawyer->timezone) }}" placeholder="America/New_York">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select name="status" class="form-select">
+                    <label class="ui-label">Status</label>
+                    <select name="status" class="ui-field">
                         <option value="active" @selected(old('status', $lawyer->status?->value ?? 'active') === 'active')>Active</option>
                         <option value="inactive" @selected(old('status', $lawyer->status?->value) === 'inactive')>Inactive</option>
                     </select>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Bio</label>
-                    <textarea name="bio" class="form-control" rows="3">{{ old('bio', $lawyer->bio) }}</textarea>
+                    <label class="ui-label">Bio</label>
+                    <textarea name="bio" class="ui-field" rows="3">{{ old('bio', $lawyer->bio) }}</textarea>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Services</label>
+                    <label class="ui-label">Services</label>
                     <div class="row g-2">
                         @foreach($services as $service)
                             <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="service_ids[]" value="{{ $service->id }}" id="svc_{{ $service->id }}" @checked(in_array($service->id, old('service_ids', $selectedServices)))>
-                                    <label class="form-check-label" for="svc_{{ $service->id }}">{{ $service->name }}</label>
+                                <div class="ui-check">
+                                    <input class="ui-check-input" type="checkbox" name="service_ids[]" value="{{ $service->id }}" id="svc_{{ $service->id }}" @checked(in_array($service->id, old('service_ids', $selectedServices)))>
+                                    <label class="ui-check-label" for="svc_{{ $service->id }}">{{ $service->name }}</label>
                                 </div>
                             </div>
                         @endforeach
@@ -71,8 +71,8 @@
             </div>
         </div>
 
-        <button class="btn btn-legal-primary">Save lawyer</button>
-        <a href="{{ route('lawyers.index') }}" class="btn btn-legal-secondary ms-2">Cancel</a>
+        <button class="ui-btn ui-btn-primary">Save lawyer</button>
+        <a href="{{ route('lawyers.index') }}" class="ui-btn ui-btn-ghost ms-2">Cancel</a>
     </form>
 </x-legal.card>
 @endsection

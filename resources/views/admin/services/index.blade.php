@@ -1,15 +1,15 @@
 @extends('layouts.app')
 
 @section('actions')
-<a href="{{ route('services.create') }}" class="btn btn-legal-primary">New service</a>
+<a href="{{ route('services.create') }}" class="ui-btn ui-btn-primary">New service</a>
 @endsection
 
 @section('content')
 <x-legal.page-header title="Services" subtitle="Catalog pricing, duration, and AI booking visibility" />
 
 <x-legal.card>
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="ui-table-wrap">
+        <table class="ui-table">
             <thead>
                 <tr>
                     <th>Service</th>
@@ -25,7 +25,7 @@
                 <tr>
                     <td>
                         <div class="fw-semibold">{{ $service->name }}</div>
-                        <div class="small text-muted">{{ $service->category?->name ?: 'Uncategorized' }}</div>
+                        <div class="small ui-muted">{{ $service->category?->name ?: 'Uncategorized' }}</div>
                     </td>
                     <td>{{ $service->currency }} {{ number_format((float) $service->price, 2) }}</td>
                     <td>{{ $service->duration_minutes }} min</td>

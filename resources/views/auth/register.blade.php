@@ -1,4 +1,8 @@
 <x-guest-layout>
+    <div class="mb-6">
+        <h2 class="font-display text-3xl">Create an account</h2>
+        <p class="mt-1 text-sm text-(--muted)">Join the firm workspace.</p>
+    </div>
     <form method="POST" action="{{ route('register') }}">
         @csrf
 

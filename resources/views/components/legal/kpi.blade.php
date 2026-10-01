@@ -4,10 +4,4 @@
     'hint' => null,
 ])
 
-<div class="legal-kpi">
-    <div class="label">{{ $label }}</div>
-    <div class="value">{{ $value }}</div>
-    @if($hint)
-        <div class="hint">{{ $hint }}</div>
-    @endif
-</div>
+<x-ui.kpi :label="$label" :value="$value" :hint="$hint" {{ $attributes }} />

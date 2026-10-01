@@ -97,8 +97,8 @@
         </x-legal.card>
 
         <x-legal.card title="AI tool activity" class="mt-3">
-            <div class="table-responsive">
-                <table class="table align-middle">
+            <div class="ui-table-wrap">
+                <table class="ui-table">
                     <thead>
                         <tr>
                             <th>Tool</th>

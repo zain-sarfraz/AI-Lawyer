@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-    <a href="{{ route('appointments.create') }}" class="btn btn-legal-primary">Book appointment</a>
+    <a href="{{ route('appointments.create') }}" class="ui-btn ui-btn-primary">Book appointment</a>
 @endsection
 
 @section('content')
@@ -11,7 +11,7 @@
         <h1>{{ $greeting }}</h1>
         <p>Calls, bookings, and the FineTuner line in one place.</p>
     </div>
-    <a href="{{ route('ai.show') }}" class="btn btn-legal-primary">Open voice line</a>
+    <a href="{{ route('ai.show') }}" class="ui-btn ui-btn-primary">Open voice line</a>
 </div>
 
 @php
@@ -75,7 +75,7 @@
                 <div class="legal-list-item">
                     <div>
                         <div class="fw-semibold">{{ $appt->start_at?->format('g:i A') }} · {{ $appt->lead?->name ?: $appt->lead?->phone ?: 'Caller' }}</div>
-                        <div class="small text-muted">{{ $appt->service?->name }} · {{ $appt->lawyer?->displayName() }}</div>
+                        <div class="small ui-muted">{{ $appt->service?->name }} · {{ $appt->lawyer?->displayName() }}</div>
                     </div>
                     <x-legal.badge :tone="$appt->source === 'phone_ai' ? 'brass' : 'navy'">
                         {{ $appt->source === 'phone_ai' ? 'AI booked' : ($appt->status?->value ?? 'scheduled') }}
@@ -118,7 +118,7 @@
                     </div>
                 </div>
             </div>
-            <a href="{{ route('ai.show') }}" class="btn btn-legal-brass btn-sm">Open AI Receptionist</a>
+            <a href="{{ route('ai.show') }}" class="ui-btn ui-btn-brass btn-sm">Open AI Receptionist</a>
         </x-legal.card>
     </div>
 </div>
@@ -133,8 +133,8 @@
                 <a href="{{ route('calls.index') }}" class="small">Call log</a>
             </x-slot:action>
 
-            <div class="table-responsive">
-                <table class="table align-middle">
+            <div class="ui-table-wrap">
+                <table class="ui-table">
                     <thead>
                         <tr>
                             <th>Caller</th>
@@ -174,7 +174,7 @@
                 <div class="legal-list-item">
                     <div>
                         <div class="fw-semibold">{{ $callback->name ?: $callback->phone }}</div>
-                        <div class="small text-muted">{{ $callback->reason ?: 'Callback requested' }}</div>
+                        <div class="small ui-muted">{{ $callback->reason ?: 'Callback requested' }}</div>
                     </div>
                     <x-legal.badge tone="danger">Open</x-legal.badge>
                 </div>
@@ -198,7 +198,7 @@
                 <div class="legal-list-item">
                     <div>
                         <a class="fw-semibold" href="{{ route('leads.show', $lead) }}">{{ $lead->name ?: $lead->phone ?: 'Unknown' }}</a>
-                        <div class="small text-muted">{{ $lead->service?->name ?: 'Service TBD' }} · {{ $lead->source ?: 'manual' }}</div>
+                        <div class="small ui-muted">{{ $lead->service?->name ?: 'Service TBD' }} · {{ $lead->source ?: 'manual' }}</div>
                     </div>
                     <x-legal.badge>{{ $lead->status?->value ?? $lead->status }}</x-legal.badge>
                 </div>

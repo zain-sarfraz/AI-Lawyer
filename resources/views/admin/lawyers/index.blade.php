@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-<a href="{{ route('lawyers.create') }}" class="btn btn-legal-primary">New lawyer</a>
+<a href="{{ route('lawyers.create') }}" class="ui-btn ui-btn-primary">New lawyer</a>
 @endsection
 
 @section('content')
@@ -12,7 +12,7 @@
         <div class="legal-empty">
             <h3>No lawyers yet</h3>
             <p class="mb-3">Add counsel so the AI receptionist can book against verified availability.</p>
-            <a href="{{ route('lawyers.create') }}" class="btn btn-legal-primary">Add lawyer</a>
+            <a href="{{ route('lawyers.create') }}" class="ui-btn ui-btn-primary">Add lawyer</a>
         </div>
     </x-legal.card>
 @else

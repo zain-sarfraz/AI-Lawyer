@@ -4,8 +4,8 @@
 <x-legal.page-header title="Audit logs" subtitle="Security and operational change history" />
 
 <x-legal.card>
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="ui-table-wrap">
+        <table class="ui-table">
             <thead>
                 <tr>
                     <th>When</th>

@@ -5,14 +5,14 @@
 
 <form class="legal-toolbar">
     <div class="flex-grow-1" style="min-width:220px">
-        <input class="form-control" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search by phone">
+        <input class="ui-field" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search by phone">
     </div>
-    <button class="btn btn-legal-secondary">Filter</button>
+    <button class="ui-btn ui-btn-ghost">Filter</button>
 </form>
 
 <x-legal.card>
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="ui-table-wrap">
+        <table class="ui-table">
             <thead>
                 <tr>
                     <th>Caller</th>

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-<a href="{{ route('leads.edit', $lead) }}" class="btn btn-legal-secondary">Edit</a>
+<a href="{{ route('leads.edit', $lead) }}" class="ui-btn ui-btn-ghost">Edit</a>
 @endsection
 
 @section('content')
@@ -54,7 +54,7 @@
                 <div class="legal-list-item">
                     <div>
                         <div class="fw-semibold">{{ $appt->start_at?->format('D, M j · g:i A') }}</div>
-                        <div class="small text-muted">{{ $appt->service?->name ?: 'Consultation' }}</div>
+                        <div class="small ui-muted">{{ $appt->service?->name ?: 'Consultation' }}</div>
                     </div>
                     <x-legal.badge tone="navy">{{ $appt->status?->value }}</x-legal.badge>
                 </div>
@@ -68,7 +68,7 @@
                 <div class="legal-list-item">
                     <div>
                         <div class="fw-semibold">{{ $call->started_at?->format('M j, Y g:i A') ?: '—' }}</div>
-                        <div class="small text-muted">{{ $call->intent ?: 'General inquiry' }} · {{ $call->outcome ?: $call->status }}</div>
+                        <div class="small ui-muted">{{ $call->intent ?: 'General inquiry' }} · {{ $call->outcome ?: $call->status }}</div>
                     </div>
                     <a href="{{ route('calls.show', $call) }}">Open</a>
                 </div>

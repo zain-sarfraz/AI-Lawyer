@@ -12,12 +12,12 @@
                     <h3>Content</h3>
                     <p>Only active, AI-visible items are available to the receptionist.</p>
                     <div class="mb-3">
-                        <label class="form-label">Title</label>
-                        <input name="title" class="form-control" placeholder="e.g. Consultation pricing policy" required>
+                        <label class="ui-label">Title</label>
+                        <input name="title" class="ui-field" placeholder="e.g. Consultation pricing policy" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select name="type" class="form-select">
+                        <label class="ui-label">Category</label>
+                        <select name="type" class="ui-field">
                             <option value="faq">FAQ</option>
                             <option value="policy">Policy</option>
                             <option value="office">Office</option>
@@ -26,24 +26,24 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Body</label>
-                        <textarea name="content" class="form-control" rows="6" required placeholder="Clear, factual content for AI answers"></textarea>
+                        <label class="ui-label">Body</label>
+                        <textarea name="content" class="ui-field" rows="6" required placeholder="Clear, factual content for AI answers"></textarea>
                     </div>
                 </div>
                 <div class="row g-3 align-items-center">
                     <div class="col-md-6">
-                        <label class="form-label">Status</label>
-                        <select name="status" class="form-select">
+                        <label class="ui-label">Status</label>
+                        <select name="status" class="ui-field">
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                         </select>
                     </div>
-                    <div class="col-md-6 form-check mt-4">
-                        <input type="checkbox" class="form-check-input" name="ai_visible" value="1" id="ai_visible" checked>
-                        <label class="form-check-label" for="ai_visible">AI visible</label>
+                    <div class="col-md-6 ui-check mt-4">
+                        <input type="checkbox" class="ui-check-input" name="ai_visible" value="1" id="ai_visible" checked>
+                        <label class="ui-check-label" for="ai_visible">AI visible</label>
                     </div>
                 </div>
-                <button class="btn btn-legal-primary mt-3">Add item</button>
+                <button class="ui-btn ui-btn-primary mt-3">Add item</button>
             </form>
         </x-legal.card>
     </div>
@@ -54,7 +54,7 @@
                 <div class="legal-list-item">
                     <div>
                         <div class="fw-semibold">{{ $item->title }}</div>
-                        <div class="small text-muted mb-1">
+                        <div class="small ui-muted mb-1">
                             Updated {{ $item->updated_at?->diffForHumans() ?? '—' }}
                         </div>
                         <div class="small" style="color:var(--ink);max-width:52ch">{{ \Illuminate\Support\Str::limit($item->content, 160) }}</div>

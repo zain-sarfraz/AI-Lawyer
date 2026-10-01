@@ -2,20 +2,12 @@
     'title' => null,
 ])
 
-<div {{ $attributes->merge(['class' => 'legal-card']) }}>
-    <div class="legal-card-body">
-        @if($title || isset($header))
-            <div class="legal-card-title-row">
-                @if(isset($header))
-                    {{ $header }}
-                @else
-                    <h2 class="legal-card-title">{{ $title }}</h2>
-                @endif
-                @isset($action)
-                    <div>{{ $action }}</div>
-                @endisset
-            </div>
-        @endif
-        {{ $slot }}
-    </div>
-</div>
+<x-ui.card :title="$title" {{ $attributes }}>
+    @isset($header)
+        <x-slot:header>{{ $header }}</x-slot:header>
+    @endisset
+    @isset($action)
+        <x-slot:action>{{ $action }}</x-slot:action>
+    @endisset
+    {{ $slot }}
+</x-ui.card>

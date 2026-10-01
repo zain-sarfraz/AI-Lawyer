@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-<a href="{{ route('leads.create') }}" class="btn btn-legal-primary">Create lead</a>
+<a href="{{ route('leads.create') }}" class="ui-btn ui-btn-primary">Create lead</a>
 @endsection
 
 @section('content')
@@ -9,22 +9,22 @@
 
 <form class="legal-toolbar">
     <div class="flex-grow-1" style="min-width:220px">
-        <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" class="form-control" placeholder="Search name, phone, email">
+        <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" class="ui-field" placeholder="Search name, phone, email">
     </div>
     <div style="min-width:180px">
-        <select name="status" class="form-select">
+        <select name="status" class="ui-field">
             <option value="">All statuses</option>
             @foreach(['new','contacted','qualified','consultation_booked','converted','lost','follow_up'] as $status)
                 <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ str_replace('_', ' ', $status) }}</option>
             @endforeach
         </select>
     </div>
-    <button class="btn btn-legal-secondary">Filter</button>
+    <button class="ui-btn ui-btn-ghost">Filter</button>
 </form>
 
 <x-legal.card>
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="ui-table-wrap">
+        <table class="ui-table">
             <thead>
                 <tr>
                     <th>Name</th>

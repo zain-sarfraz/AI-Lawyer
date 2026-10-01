@@ -13,8 +13,8 @@
                     <p>Firm defaults apply when no lawyer-specific hours exist.</p>
                     <div class="row g-2">
                         <div class="col-md-6">
-                            <label class="form-label">Lawyer</label>
-                            <select name="lawyer_id" class="form-select">
+                            <label class="ui-label">Lawyer</label>
+                            <select name="lawyer_id" class="ui-field">
                                 <option value="">Firm default</option>
                                 @foreach($lawyers as $lawyer)
                                     <option value="{{ $lawyer->id }}">{{ $lawyer->displayName() }}</option>
@@ -22,24 +22,24 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Day</label>
-                            <select name="day_of_week" class="form-select">
+                            <label class="ui-label">Day</label>
+                            <select name="day_of_week" class="ui-field">
                                 @foreach(['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] as $i => $d)
                                     <option value="{{ $i }}">{{ $d }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Start</label>
-                            <input type="time" name="start_time" class="form-control" value="09:00" required>
+                            <label class="ui-label">Start</label>
+                            <input type="time" name="start_time" class="ui-field" value="09:00" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">End</label>
-                            <input type="time" name="end_time" class="form-control" value="17:00" required>
+                            <label class="ui-label">End</label>
+                            <input type="time" name="end_time" class="ui-field" value="17:00" required>
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-legal-primary">Save hours</button>
+                <button class="ui-btn ui-btn-primary">Save hours</button>
             </form>
 
             <hr class="my-4" style="border-color:var(--line);opacity:1">
@@ -49,7 +49,7 @@
                     <li class="legal-list-item">
                         <div>
                             <div class="fw-semibold">{{ $hour->lawyer?->displayName() ?: 'Firm default' }}</div>
-                            <div class="small text-muted">Day {{ $hour->day_of_week }}</div>
+                            <div class="small ui-muted">Day {{ $hour->day_of_week }}</div>
                         </div>
                         <div class="fw-semibold">{{ $hour->start_time }} – {{ $hour->end_time }}</div>
                     </li>
@@ -69,16 +69,16 @@
                     <p>Holidays close booking for the firm calendar.</p>
                     <div class="row g-2">
                         <div class="col-md-5">
-                            <label class="form-label">Date</label>
-                            <input type="date" name="date" class="form-control" required>
+                            <label class="ui-label">Date</label>
+                            <input type="date" name="date" class="ui-field" required>
                         </div>
                         <div class="col-md-7">
-                            <label class="form-label">Name</label>
-                            <input name="name" class="form-control" placeholder="Holiday name" required>
+                            <label class="ui-label">Name</label>
+                            <input name="name" class="ui-field" placeholder="Holiday name" required>
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-legal-primary">Save holiday</button>
+                <button class="ui-btn ui-btn-primary">Save holiday</button>
             </form>
 
             <hr class="my-4" style="border-color:var(--line);opacity:1">
@@ -87,7 +87,7 @@
                 @forelse($holidays as $holiday)
                     <li class="legal-list-item">
                         <div class="fw-semibold">{{ $holiday->name }}</div>
-                        <div class="text-muted">{{ $holiday->date->toDateString() }}</div>
+                        <div class="ui-muted">{{ $holiday->date->toDateString() }}</div>
                     </li>
                 @empty
                     <li class="legal-empty py-3">No holidays scheduled.</li>

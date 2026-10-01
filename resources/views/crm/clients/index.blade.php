@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('actions')
-<a href="{{ route('clients.create') }}" class="btn btn-legal-primary">New client</a>
+<a href="{{ route('clients.create') }}" class="ui-btn ui-btn-primary">New client</a>
 @endsection
 
 @section('content')
@@ -9,14 +9,14 @@
 
 <form class="legal-toolbar">
     <div class="flex-grow-1" style="min-width:220px">
-        <input class="form-control" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search clients">
+        <input class="ui-field" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search clients">
     </div>
-    <button class="btn btn-legal-secondary">Filter</button>
+    <button class="ui-btn ui-btn-ghost">Filter</button>
 </form>
 
 <x-legal.card>
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="ui-table-wrap">
+        <table class="ui-table">
             <thead>
                 <tr>
                     <th>Name</th>

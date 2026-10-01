@@ -11,8 +11,8 @@
             <p>Slots load from conflict-safe availability.</p>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Service</label>
-                    <select name="service_id" id="service_id" class="form-select" required>
+                    <label class="ui-label">Service</label>
+                    <select name="service_id" id="service_id" class="ui-field" required>
                         <option value="">Select service</option>
                         @foreach($services as $service)
                             <option value="{{ $service->id }}">{{ $service->name }} ({{ $service->duration_minutes }} min · {{ $service->currency }} {{ $service->price }})</option>
@@ -20,8 +20,8 @@
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Lawyer</label>
-                    <select name="lawyer_id" id="lawyer_id" class="form-select" required>
+                    <label class="ui-label">Lawyer</label>
+                    <select name="lawyer_id" id="lawyer_id" class="ui-field" required>
                         <option value="">Select lawyer</option>
                         @foreach($lawyers as $lawyer)
                             <option value="{{ $lawyer->id }}">{{ $lawyer->displayName() }}</option>
@@ -29,12 +29,12 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Date</label>
-                    <input type="date" id="date" class="form-control" value="{{ now()->toDateString() }}">
+                    <label class="ui-label">Date</label>
+                    <input type="date" id="date" class="ui-field" value="{{ now()->toDateString() }}">
                 </div>
                 <div class="col-md-8">
-                    <label class="form-label">Start time</label>
-                    <select name="start_at" id="start_at" class="form-select" required>
+                    <label class="ui-label">Start time</label>
+                    <select name="start_at" id="start_at" class="ui-field" required>
                         <option value="">Load slots…</option>
                     </select>
                 </div>
@@ -46,26 +46,26 @@
             <p>Creates or matches a lead for this booking.</p>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label">Name</label>
-                    <input name="name" class="form-control" value="{{ old('name') }}">
+                    <label class="ui-label">Name</label>
+                    <input name="name" class="ui-field" value="{{ old('name') }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Phone</label>
-                    <input name="phone" class="form-control" value="{{ old('phone') }}">
+                    <label class="ui-label">Phone</label>
+                    <input name="phone" class="ui-field" value="{{ old('phone') }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" value="{{ old('email') }}">
+                    <label class="ui-label">Email</label>
+                    <input type="email" name="email" class="ui-field" value="{{ old('email') }}">
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="3">{{ old('notes') }}</textarea>
+                    <label class="ui-label">Notes</label>
+                    <textarea name="notes" class="ui-field" rows="3">{{ old('notes') }}</textarea>
                 </div>
             </div>
         </div>
 
-        <button class="btn btn-legal-primary">Book appointment</button>
-        <a href="{{ route('appointments.index') }}" class="btn btn-legal-secondary ms-2">Cancel</a>
+        <button class="ui-btn ui-btn-primary">Book appointment</button>
+        <a href="{{ route('appointments.index') }}" class="ui-btn ui-btn-ghost ms-2">Cancel</a>
     </form>
 </x-legal.card>
 @endsection

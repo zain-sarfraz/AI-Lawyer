@@ -16,20 +16,20 @@
             <p>Primary intake fields used across calls and appointments.</p>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Name</label>
-                    <input name="name" value="{{ old('name', $lead->name) }}" class="form-control" placeholder="Full name">
+                    <label class="ui-label">Name</label>
+                    <input name="name" value="{{ old('name', $lead->name) }}" class="ui-field" placeholder="Full name">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Phone</label>
-                    <input name="phone" value="{{ old('phone', $lead->phone) }}" class="form-control" placeholder="+1…">
+                    <label class="ui-label">Phone</label>
+                    <input name="phone" value="{{ old('phone', $lead->phone) }}" class="ui-field" placeholder="+1…">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Email</label>
-                    <input name="email" type="email" value="{{ old('email', $lead->email) }}" class="form-control">
+                    <label class="ui-label">Email</label>
+                    <input name="email" type="email" value="{{ old('email', $lead->email) }}" class="ui-field">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Source</label>
-                    <input name="source" value="{{ old('source', $lead->source) }}" class="form-control" placeholder="phone_ai, website, referral…">
+                    <label class="ui-label">Source</label>
+                    <input name="source" value="{{ old('source', $lead->source) }}" class="ui-field" placeholder="phone_ai, website, referral…">
                 </div>
             </div>
         </div>
@@ -39,8 +39,8 @@
             <p>Status, service interest, and counsel assignment.</p>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select name="status" class="form-select" required>
+                    <label class="ui-label">Status</label>
+                    <select name="status" class="ui-field" required>
                         @foreach(['new','contacted','qualified','consultation_booked','consultation_completed','converted','lost','follow_up'] as $status)
                             <option value="{{ $status }}" @selected(old('status', $lead->status?->value ?? $lead->status ?? 'new') === $status)>
                                 {{ str_replace('_', ' ', $status) }}
@@ -49,8 +49,8 @@
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Service</label>
-                    <select name="service_id" class="form-select">
+                    <label class="ui-label">Service</label>
+                    <select name="service_id" class="ui-field">
                         <option value="">—</option>
                         @foreach($services as $service)
                             <option value="{{ $service->id }}" @selected(old('service_id', $lead->service_id) == $service->id)>{{ $service->name }}</option>
@@ -58,8 +58,8 @@
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Lawyer</label>
-                    <select name="lawyer_id" class="form-select">
+                    <label class="ui-label">Lawyer</label>
+                    <select name="lawyer_id" class="ui-field">
                         <option value="">—</option>
                         @foreach($lawyers as $lawyer)
                             <option value="{{ $lawyer->id }}" @selected(old('lawyer_id', $lead->lawyer_id) == $lawyer->id)>{{ $lawyer->displayName() }}</option>
@@ -67,14 +67,14 @@
                     </select>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="4">{{ old('notes', $lead->notes) }}</textarea>
+                    <label class="ui-label">Notes</label>
+                    <textarea name="notes" class="ui-field" rows="4">{{ old('notes', $lead->notes) }}</textarea>
                 </div>
             </div>
         </div>
 
-        <button class="btn btn-legal-primary">Save lead</button>
-        <a href="{{ $lead->exists ? route('leads.show', $lead) : route('leads.index') }}" class="btn btn-legal-secondary ms-2">Cancel</a>
+        <button class="ui-btn ui-btn-primary">Save lead</button>
+        <a href="{{ $lead->exists ? route('leads.show', $lead) : route('leads.index') }}" class="ui-btn ui-btn-ghost ms-2">Cancel</a>
     </form>
 </x-legal.card>
 @endsection

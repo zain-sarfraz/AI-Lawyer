@@ -3,14 +3,8 @@
     'subtitle' => null,
 ])
 
-<div class="legal-page-header">
-    <div>
-        <h1>{{ $title }}</h1>
-        @if($subtitle)
-            <p>{{ $subtitle }}</p>
-        @endif
-    </div>
-    @if(isset($actions))
-        <div class="d-flex align-items-center gap-2 flex-wrap">{{ $actions }}</div>
-    @endif
-</div>
+<x-ui.page-header :title="$title" :subtitle="$subtitle" {{ $attributes }}>
+    @isset($actions)
+        <x-slot:actions>{{ $actions }}</x-slot:actions>
+    @endisset
+</x-ui.page-header>

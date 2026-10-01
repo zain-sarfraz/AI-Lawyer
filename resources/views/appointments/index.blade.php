@@ -1,15 +1,15 @@
 @extends('layouts.app')
 
 @section('actions')
-<a href="{{ route('appointments.create') }}" class="btn btn-legal-primary">Book appointment</a>
+<a href="{{ route('appointments.create') }}" class="ui-btn ui-btn-primary">Book appointment</a>
 @endsection
 
 @section('content')
 <x-legal.page-header title="Appointments" subtitle="Verified consultations across the firm calendar" />
 
 <x-legal.card>
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="ui-table-wrap">
+        <table class="ui-table">
             <thead>
                 <tr>
                     <th>When</th>
@@ -38,7 +38,7 @@
                         @if(in_array($appointment->status?->value, ['scheduled','confirmed','in_progress'], true))
                             <form method="POST" action="{{ route('appointments.cancel', $appointment) }}">
                                 @csrf
-                                <button class="btn btn-sm btn-legal-danger">Cancel</button>
+                                <button class="ui-btn ui-btn-danger btn-sm">Cancel</button>
                             </form>
                         @endif
                     </td>
