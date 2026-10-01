@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\SetFirmContext;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\VerifyTwilioSignature;
 use App\Http\Middleware\VerifyVoiceGatewaySecret;
@@ -29,6 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'twilio.signature' => VerifyTwilioSignature::class,
             'voice.gateway' => VerifyVoiceGatewaySecret::class,
         ]);
+
+        $middleware->web(append: [SetFirmContext::class]);
+        $middleware->api(append: [SetFirmContext::class]);
 
         $middleware->validateCsrfTokens(except: [
             'api/webhooks/*',

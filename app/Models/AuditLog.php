@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditLog extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     public $timestamps = false;
 
     protected $fillable = [
-        'user_id', 'action', 'entity_type', 'entity_id',
+        'firm_id', 'user_id', 'action', 'entity_type', 'entity_id',
         'old_values_json', 'new_values_json', 'ip_address', 'created_at',
     ];
 

@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ScheduleBreak extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'lawyer_id', 'day_of_week', 'start_time', 'end_time',
+        'firm_id', 'lawyer_id', 'day_of_week', 'start_time', 'end_time',
     ];
 
     protected function casts(): array

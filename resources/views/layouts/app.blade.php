@@ -15,35 +15,57 @@
 </head>
 <body class="min-h-full antialiased" x-data="shell()" @keydown.window.meta.k.prevent="openPalette()" @keydown.window.ctrl.k.prevent="openPalette()" @keydown.escape.window="palette = false; mobileOpen = false">
 @php
-    $firmName = optional(\App\Models\FirmSetting::query()->first())->firm_name ?: 'Law Firm';
+    $user = auth()->user();
+    $firmName = $user?->firm?->firm_name ?: 'Law Firm';
+    $allows = function (?string $permission) use ($user): bool {
+        if ($permission === null) {
+            return true;
+        }
+
+        if (str_contains($permission, '|')) {
+            foreach (explode('|', $permission) as $name) {
+                if ($user?->can($name)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return (bool) $user?->can($permission);
+    };
     $nav = [
         ['group' => 'Workspace', 'items' => [
-            ['route' => 'dashboard', 'match' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'grid'],
-            ['route' => 'ai.show', 'match' => 'ai.*', 'label' => 'Voice line', 'icon' => 'broadcast'],
-            ['route' => 'calls.index', 'match' => 'calls.*', 'label' => 'Calls', 'icon' => 'phone'],
-            ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check'],
-            ['route' => 'schedule.index', 'match' => 'schedule.*', 'label' => 'Calendar', 'icon' => 'calendar'],
+            ['route' => 'dashboard', 'match' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'grid', 'permission' => null],
+            ['route' => 'ai.show', 'match' => 'ai.*', 'label' => 'Voice line', 'icon' => 'broadcast', 'permission' => 'ai.settings.manage'],
+            ['route' => 'calls.index', 'match' => 'calls.*', 'label' => 'Calls', 'icon' => 'phone', 'permission' => 'calls.view'],
+            ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check', 'permission' => 'appointments.view'],
+            ['route' => 'schedule.index', 'match' => 'schedule.*', 'label' => 'Calendar', 'icon' => 'calendar', 'permission' => 'schedules.manage|appointments.view'],
         ]],
         ['group' => 'CRM', 'items' => [
-            ['route' => 'leads.index', 'match' => 'leads.*', 'label' => 'Leads', 'icon' => 'user-plus'],
-            ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users'],
+            ['route' => 'leads.index', 'match' => 'leads.*', 'label' => 'Leads', 'icon' => 'user-plus', 'permission' => 'leads.view'],
+            ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users', 'permission' => 'clients.view'],
         ]],
         ['group' => 'Firm', 'items' => [
-            ['route' => 'lawyers.index', 'match' => 'lawyers.*', 'label' => 'Lawyers', 'icon' => 'briefcase'],
-            ['route' => 'services.index', 'match' => 'services.*', 'label' => 'Services', 'icon' => 'journal'],
-            ['route' => 'knowledge.index', 'match' => 'knowledge.*', 'label' => 'Knowledge Base', 'icon' => 'book'],
+            ['route' => 'lawyers.index', 'match' => 'lawyers.*', 'label' => 'Lawyers', 'icon' => 'briefcase', 'permission' => 'lawyers.manage'],
+            ['route' => 'services.index', 'match' => 'services.*', 'label' => 'Services', 'icon' => 'journal', 'permission' => 'services.manage'],
+            ['route' => 'knowledge.index', 'match' => 'knowledge.*', 'label' => 'Knowledge Base', 'icon' => 'book', 'permission' => 'knowledge.manage'],
         ]],
         ['group' => 'Insights', 'items' => [
-            ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart'],
+            ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart', 'permission' => 'reports.view'],
         ]],
         ['group' => 'System', 'items' => [
-            ['route' => 'settings.edit', 'match' => 'settings.*', 'label' => 'Settings', 'icon' => 'gear'],
-            ['route' => 'audit.index', 'match' => 'audit.*', 'label' => 'Audit Logs', 'icon' => 'shield'],
+            ['route' => 'settings.edit', 'match' => 'settings.*', 'label' => 'Settings', 'icon' => 'gear', 'permission' => 'firm.settings.manage'],
+            ['route' => 'audit.index', 'match' => 'audit.*', 'label' => 'Audit Logs', 'icon' => 'shield', 'permission' => 'audit.view'],
         ]],
     ];
-    $user = auth()->user();
+    $nav = collect($nav)->map(function (array $section) use ($allows) {
+        $section['items'] = collect($section['items'])->filter(fn (array $item) => $allows($item['permission']))->values()->all();
+
+        return $section;
+    })->filter(fn (array $section) => count($section['items']) > 0)->values()->all();
     $initials = collect(explode(' ', $user->name ?? 'U'))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
-    $roleLabel = $user->role->label ?? $user->role->name ?? 'Team';
+    $roleLabel = $user?->getRoleNames()->first() ?: 'Team';
     $gatewayConfigured = filled(config('services.voice_gateway.public_ws_url')) || filled(config('services.openai.api_key'));
     $paletteItems = collect($nav)->flatMap(fn ($section) => collect($section['items'])->map(fn ($item) => [
         'label' => $item['label'],

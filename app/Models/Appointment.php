@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Enums\AppointmentStatus;
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Appointment extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'lawyer_id', 'client_id', 'lead_id', 'service_id',
+        'firm_id', 'lawyer_id', 'client_id', 'lead_id', 'service_id',
         'start_at', 'end_at', 'status', 'source', 'external_event_id',
         'idempotency_key', 'notes',
     ];

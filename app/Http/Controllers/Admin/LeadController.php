@@ -9,14 +9,26 @@ use App\Models\Lawyer;
 use App\Models\Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class LeadController extends Controller
+class LeadController extends Controller implements HasMiddleware
 {
     public function __construct(private readonly LeadService $leads) {}
 
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:leads.view', only: ['index', 'show']),
+            new Middleware('permission:leads.manage', only: ['create', 'store', 'edit', 'update']),
+        ];
+    }
+
     public function index(Request $request): View
     {
+        $this->authorize('viewAny', Lead::class);
+
         return view('crm.leads.index', [
             'leads' => $this->leads->list($request->only('q', 'status')),
             'filters' => $request->only('q', 'status'),
@@ -25,6 +37,8 @@ class LeadController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Lead::class);
+
         return view('crm.leads.form', [
             'lead' => new Lead(),
             'services' => Service::query()->active()->orderBy('name')->get(),
@@ -34,6 +48,8 @@ class LeadController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Lead::class);
+
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -51,6 +67,8 @@ class LeadController extends Controller
 
     public function show(Lead $lead): View
     {
+        $this->authorize('view', $lead);
+
         $lead->load([
             'service',
             'lawyer.user',
@@ -64,6 +82,8 @@ class LeadController extends Controller
 
     public function edit(Lead $lead): View
     {
+        $this->authorize('update', $lead);
+
         return view('crm.leads.form', [
             'lead' => $lead,
             'services' => Service::query()->active()->orderBy('name')->get(),
@@ -73,6 +93,8 @@ class LeadController extends Controller
 
     public function update(Request $request, Lead $lead): RedirectResponse
     {
+        $this->authorize('update', $lead);
+
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],

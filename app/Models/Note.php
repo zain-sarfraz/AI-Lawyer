@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Note extends Model
 {
-    protected $fillable = ['user_id', 'notable_type', 'notable_id', 'body'];
+    use \App\Models\Concerns\BelongsToFirm;
+
+    protected $fillable = ['firm_id', 'user_id', 'notable_type', 'notable_id', 'body'];
 
     public function user(): BelongsTo
     {

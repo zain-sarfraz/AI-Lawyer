@@ -9,17 +9,30 @@ use App\Models\AuditLog;
 use App\Models\Integration;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class SettingsController extends Controller
+class SettingsController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly FirmService $firm,
         private readonly IntegrationCredentialService $integrations,
     ) {}
 
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:firm.settings.manage', only: ['edit', 'update']),
+            new Middleware('permission:integrations.manage', only: ['updateIntegration']),
+            new Middleware('permission:audit.view', only: ['audit']),
+        ];
+    }
+
     public function edit(): View
     {
+        $this->authorize('view', $this->firm->current());
+
         return view('settings.edit', [
             'firm' => $this->firm->current(),
             'integrations' => Integration::query()->orderBy('provider')->get(),
@@ -28,6 +41,8 @@ class SettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        $this->authorize('update', $this->firm->current());
+
         $data = $request->validate([
             'firm_name' => ['required', 'string', 'max:255'],
             'legal_name' => ['nullable', 'string', 'max:255'],
@@ -58,6 +73,8 @@ class SettingsController extends Controller
 
     public function updateIntegration(Request $request): RedirectResponse
     {
+        $this->authorize('create', Integration::class);
+
         $data = $request->validate([
             'provider' => ['required', 'string', 'max:64'],
             'api_key' => ['nullable', 'string'],
@@ -79,6 +96,8 @@ class SettingsController extends Controller
 
     public function audit(): View
     {
+        $this->authorize('viewAny', AuditLog::class);
+
         return view('settings.audit', [
             'logs' => AuditLog::query()->with('user')->latest('created_at')->paginate(40),
         ]);

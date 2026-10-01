@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CallbackRequest extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $fillable = [
-        'name', 'phone', 'email', 'reason', 'lead_id', 'call_id', 'status',
+        'firm_id', 'name', 'phone', 'email', 'reason', 'lead_id', 'call_id', 'status',
     ];
 
     public function lead(): BelongsTo

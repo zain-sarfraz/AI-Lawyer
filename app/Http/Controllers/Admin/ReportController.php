@@ -6,10 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Call;
 use App\Models\Lead;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class ReportController extends Controller
+class ReportController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:reports.view'),
+        ];
+    }
+
     public function index(): View
     {
         $today = now()->toDateString();

@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class Holiday extends Model
 {
-    protected $fillable = ['date', 'name', 'status'];
+    use \App\Models\Concerns\BelongsToFirm;
+
+    protected $fillable = ['firm_id', 'date', 'name', 'status'];
 
     protected function casts(): array
     {

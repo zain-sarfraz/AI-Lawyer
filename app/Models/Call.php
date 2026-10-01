@@ -3,14 +3,18 @@
 namespace App\Models;
 
 use App\Enums\CallDirection;
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Call extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'provider_call_id', 'direction', 'caller_phone', 'lawyer_id', 'lead_id',
+        'firm_id', 'provider_call_id', 'direction', 'caller_phone', 'lawyer_id', 'lead_id',
         'client_id', 'started_at', 'ended_at', 'duration_seconds', 'status',
         'recording_url', 'transcript', 'summary', 'intent', 'outcome',
     ];

@@ -3,23 +3,24 @@
 namespace App\Models;
 
 use App\Enums\UserStatus;
+use App\Models\Concerns\BelongsToFirm;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use BelongsToFirm, HasFactory, HasRoles, Notifiable;
 
     protected $fillable = [
+        'firm_id',
         'name',
         'email',
         'password',
-        'role_id',
         'status',
     ];
 
@@ -37,11 +38,6 @@ class User extends Authenticatable
         ];
     }
 
-    public function role(): BelongsTo
-    {
-        return $this->belongsTo(Role::class);
-    }
-
     public function lawyer(): HasOne
     {
         return $this->hasOne(Lawyer::class);
@@ -49,25 +45,12 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission): bool
     {
-        if (! $this->role) {
-            return false;
-        }
-
-        if ($this->role->name === 'admin') {
-            return true;
-        }
-
-        return $this->role->permissions->contains('name', $permission);
-    }
-
-    public function hasRole(string ...$roles): bool
-    {
-        return $this->role && in_array($this->role->name, $roles, true);
+        return $this->can($permission);
     }
 
     public function isAdmin(): bool
     {
-        return $this->hasRole('admin');
+        return $this->hasAnyRole(['Owner', 'Admin']);
     }
 
     public function isActive(): bool

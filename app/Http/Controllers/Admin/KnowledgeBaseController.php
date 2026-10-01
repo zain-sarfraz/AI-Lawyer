@@ -6,12 +6,23 @@ use App\Http\Controllers\Controller;
 use App\Models\KnowledgeBaseItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class KnowledgeBaseController extends Controller
+class KnowledgeBaseController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:knowledge.manage'),
+        ];
+    }
+
     public function index(): View
     {
+        $this->authorize('viewAny', KnowledgeBaseItem::class);
+
         return view('admin.knowledge.index', [
             'items' => KnowledgeBaseItem::query()->latest()->paginate(25),
         ]);
@@ -19,6 +30,8 @@ class KnowledgeBaseController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', KnowledgeBaseItem::class);
+
         $data = $request->validate([
             'type' => ['required', 'string', 'max:64'],
             'title' => ['required', 'string', 'max:255'],

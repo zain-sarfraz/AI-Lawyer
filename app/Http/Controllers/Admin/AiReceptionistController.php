@@ -12,10 +12,12 @@ use App\Models\Call;
 use App\Models\Lead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\Http;
 use Illuminate\View\View;
 
-class AiReceptionistController extends Controller
+class AiReceptionistController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly FirmService $firm,
@@ -23,8 +25,17 @@ class AiReceptionistController extends Controller
         private readonly FineTunerService $fineTuner,
     ) {}
 
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:ai.settings.manage'),
+        ];
+    }
+
     public function show(): View
     {
+        $this->authorize('update', $this->firm->current());
+
         $gatewayHealth = null;
         $gatewayUrl = rtrim((string) config('services.voice_gateway.url'), '/');
         if ($gatewayUrl !== '') {

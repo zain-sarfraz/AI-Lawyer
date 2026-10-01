@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Auth\FirmAwareUserProvider;
+use App\Domain\Firm\FirmContext;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(FirmContext::class);
     }
 
     /**
@@ -19,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Auth::provider('firm-eloquent', function ($app, array $config) {
+            return new FirmAwareUserProvider($app['hash'], $config['model']);
+        });
     }
 }

@@ -2,11 +2,11 @@
 
 namespace App\Jobs;
 
-use App\Domain\Integrations\OpenAiService;
+use App\Domain\Firm\FirmContext;
 use App\Domain\Integrations\TwilioService;
 use App\Models\Appointment;
-use App\Models\Call;
 use App\Models\NotificationLog;
+use App\Models\Scopes\FirmScope;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -21,13 +21,20 @@ class SendAppointmentConfirmationJob implements ShouldQueue
     public function handle(TwilioService $twilio): void
     {
         $appointment = Appointment::query()
-            ->with(['lead', 'service', 'lawyer.user'])
+            ->withoutGlobalScope(FirmScope::class)
             ->find($this->appointmentId);
 
         if (! $appointment) {
             return;
         }
 
+        app(FirmContext::class)->run((int) $appointment->firm_id, function () use ($appointment, $twilio): void {
+            $this->deliver($appointment->load(['lead', 'service', 'lawyer.user']), $twilio);
+        });
+    }
+
+    private function deliver(Appointment $appointment, TwilioService $twilio): void
+    {
         $lead = $appointment->lead;
         $when = $appointment->start_at?->timezone(config('app.timezone'))->toDayDateTimeString();
         $service = $appointment->service?->name ?? 'consultation';

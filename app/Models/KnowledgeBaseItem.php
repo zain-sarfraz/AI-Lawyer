@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class KnowledgeBaseItem extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $fillable = [
-        'type', 'title', 'content', 'status', 'ai_visible',
+        'firm_id', 'type', 'title', 'content', 'status', 'ai_visible',
     ];
 
     protected function casts(): array

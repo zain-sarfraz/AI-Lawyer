@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Domain\AI\AiReceptionistService;
 use App\Domain\Calls\CallService;
+use App\Domain\Firm\FirmContext;
 use App\Http\Controllers\Controller;
 use App\Models\Call;
+use App\Models\Firm;
+use App\Models\Scopes\FirmScope;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +22,8 @@ class TwilioVoiceController extends Controller
 
     public function incoming(Request $request): Response
     {
+        $this->bindInboundFirm($request);
+
         $callSid = (string) $request->input('CallSid', 'local-'.uniqid());
         $from = (string) $request->input('From', 'unknown');
 
@@ -72,24 +77,58 @@ XML;
 
     public function status(Request $request): Response
     {
-        $call = Call::query()->where('provider_call_id', $request->input('CallSid'))->first();
-        if ($call) {
+        $this->withCall((string) $request->input('CallSid'), function (Call $call) use ($request): void {
             $this->calls->complete($call, [
                 'status' => strtolower((string) $request->input('CallStatus', 'completed')),
                 'duration_seconds' => $request->integer('CallDuration') ?: null,
             ]);
-        }
+        });
 
         return response('OK');
     }
 
     public function recording(Request $request): Response
     {
-        $call = Call::query()->where('provider_call_id', $request->input('CallSid'))->first();
-        if ($call) {
+        $this->withCall((string) $request->input('CallSid'), function (Call $call) use ($request): void {
             $call->update(['recording_url' => $request->input('RecordingUrl')]);
-        }
+        });
 
         return response('OK');
+    }
+
+    private function bindInboundFirm(Request $request): void
+    {
+        $firms = app(FirmContext::class);
+        if ($firms->id() !== null) {
+            return;
+        }
+
+        $header = $request->header('X-Firm-Id');
+        if (is_numeric($header)) {
+            $firms->set((int) $header);
+
+            return;
+        }
+
+        $to = (string) $request->input('To', '');
+        $firmId = $to !== ''
+            ? Firm::query()->where('twilio_phone_number', $to)->value('id')
+            : null;
+        $firmId ??= Firm::query()->orderBy('id')->value('id');
+        if ($firmId !== null) {
+            $firms->set((int) $firmId);
+        }
+    }
+
+    private function withCall(string $providerCallId, callable $callback): void
+    {
+        $call = Call::query()->withoutGlobalScope(FirmScope::class)
+            ->where('provider_call_id', $providerCallId)
+            ->first();
+        if (! $call) {
+            return;
+        }
+
+        app(FirmContext::class)->run((int) $call->firm_id, fn () => $callback($call));
     }
 }

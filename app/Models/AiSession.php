@@ -8,8 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AiSession extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $fillable = [
-        'call_id', 'provider_session_id', 'started_at', 'ended_at',
+        'firm_id', 'call_id', 'provider_session_id', 'started_at', 'ended_at',
         'status', 'audio_seconds', 'metadata_json',
     ];
 

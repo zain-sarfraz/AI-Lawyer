@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\EntityStatus;
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,8 +12,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Client extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'name', 'phone', 'email', 'status', 'notes',
+        'firm_id', 'name', 'phone', 'email', 'status', 'notes',
     ];
 
     protected function casts(): array

@@ -6,8 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Integration extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $fillable = [
-        'provider', 'status', 'encrypted_credentials', 'settings_json',
+        'firm_id', 'provider', 'status', 'encrypted_credentials', 'settings_json',
     ];
 
     protected function casts(): array

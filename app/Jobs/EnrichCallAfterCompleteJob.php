@@ -2,8 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Domain\Firm\FirmContext;
 use App\Domain\Integrations\OpenAiService;
 use App\Models\Call;
+use App\Models\Scopes\FirmScope;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -15,14 +17,16 @@ class EnrichCallAfterCompleteJob implements ShouldQueue
 
     public function handle(OpenAiService $openAi): void
     {
-        $call = Call::query()->find($this->callId);
+        $call = Call::query()->withoutGlobalScope(FirmScope::class)->find($this->callId);
         if (! $call || blank($call->transcript) || filled($call->summary)) {
             return;
         }
 
-        $summary = $openAi->summarizeTranscript($call->transcript);
-        if ($summary) {
-            $call->update(['summary' => $summary]);
-        }
+        app(FirmContext::class)->run((int) $call->firm_id, function () use ($call, $openAi): void {
+            $summary = $openAi->summarizeTranscript($call->transcript);
+            if ($summary) {
+                $call->update(['summary' => $summary]);
+            }
+        });
     }
 }

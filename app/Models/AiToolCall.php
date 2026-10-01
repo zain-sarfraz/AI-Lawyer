@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AiToolCall extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $fillable = [
-        'ai_session_id', 'tool_name', 'arguments_json', 'result_json',
+        'firm_id', 'ai_session_id', 'tool_name', 'arguments_json', 'result_json',
         'status', 'duration_ms',
     ];
 

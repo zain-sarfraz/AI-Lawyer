@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\EntityStatus;
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,8 +12,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Lawyer extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'user_id', 'title', 'bio', 'specialties', 'timezone', 'status',
+        'firm_id', 'user_id', 'title', 'bio', 'specialties', 'timezone', 'status',
     ];
 
     protected function casts(): array

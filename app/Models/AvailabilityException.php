@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Enums\AvailabilityExceptionType;
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AvailabilityException extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'lawyer_id', 'date', 'start_time', 'end_time', 'type', 'notes',
+        'firm_id', 'lawyer_id', 'date', 'start_time', 'end_time', 'type', 'notes',
     ];
 
     protected function casts(): array

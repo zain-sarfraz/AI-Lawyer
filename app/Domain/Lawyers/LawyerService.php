@@ -6,7 +6,6 @@ use App\Domain\Audit\AuditLogService;
 use App\Models\Lawyer;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 
 class LawyerService
 {
@@ -19,10 +18,10 @@ class LawyerService
                 $user = User::query()->create([
                     'name' => $userData['name'],
                     'email' => $userData['email'],
-                    'password' => Hash::make($userData['password'] ?? 'password'),
-                    'role_id' => $userData['role_id'] ?? null,
+                    'password' => $userData['password'] ?? 'password',
                     'status' => 'active',
                 ]);
+                $user->assignRole('Lawyer');
                 $data['user_id'] = $user->id;
             }
 

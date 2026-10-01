@@ -3,11 +3,11 @@
 namespace Tests\Unit;
 
 use App\Domain\Appointments\AppointmentBookingService;
+use App\Domain\Firm\FirmContext;
 use App\Domain\Scheduling\AvailabilityService;
 use App\Models\Appointment;
 use App\Models\FirmSetting;
 use App\Models\Lawyer;
-use App\Models\Role;
 use App\Models\Service;
 use App\Models\User;
 use App\Models\WorkingHour;
@@ -88,17 +88,7 @@ class BookingConcurrencyTest extends TestCase
 
     private function seedMinimalSchedule(): void
     {
-        $role = Role::query()->create(['name' => 'lawyer', 'label' => 'Lawyer']);
-        $user = User::query()->create([
-            'name' => 'Test Lawyer',
-            'email' => 'lawyer-test@example.com',
-            'password' => 'password',
-            'role_id' => $role->id,
-            'status' => 'active',
-            'email_verified_at' => now(),
-        ]);
-
-        FirmSetting::query()->create([
+        $firm = FirmSetting::query()->create([
             'firm_name' => 'Test Firm',
             'timezone' => 'UTC',
             'currency' => 'USD',
@@ -107,6 +97,15 @@ class BookingConcurrencyTest extends TestCase
             'buffer_minutes' => 0,
             'booking_horizon_days' => 60,
             'cancellation_window_hours' => 24,
+        ]);
+        app(FirmContext::class)->set($firm->id);
+
+        $user = User::query()->create([
+            'name' => 'Test Lawyer',
+            'email' => 'lawyer-test@example.com',
+            'password' => 'password',
+            'status' => 'active',
+            'email_verified_at' => now(),
         ]);
 
         $lawyer = Lawyer::query()->create([

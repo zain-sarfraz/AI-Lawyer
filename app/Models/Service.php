@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Service extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $fillable = [
-        'category_id', 'name', 'description', 'price', 'currency',
+        'firm_id', 'category_id', 'name', 'description', 'price', 'currency',
         'duration_minutes', 'buffer_minutes', 'booking_enabled', 'ai_enabled', 'status',
     ];
 

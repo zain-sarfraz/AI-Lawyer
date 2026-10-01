@@ -5,18 +5,28 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Lawyers\LawyerService;
 use App\Http\Controllers\Controller;
 use App\Models\Lawyer;
-use App\Models\Role;
 use App\Models\Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class LawyerController extends Controller
+class LawyerController extends Controller implements HasMiddleware
 {
     public function __construct(private readonly LawyerService $lawyers) {}
 
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:lawyers.manage'),
+        ];
+    }
+
     public function index(): View
     {
+        $this->authorize('viewAny', Lawyer::class);
+
         return view('admin.lawyers.index', [
             'lawyers' => Lawyer::query()->with('user', 'services')->paginate(25),
         ]);
@@ -24,6 +34,8 @@ class LawyerController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Lawyer::class);
+
         return view('admin.lawyers.form', [
             'lawyer' => new Lawyer(['status' => 'active']),
             'services' => Service::query()->active()->orderBy('name')->get(),
@@ -33,6 +45,8 @@ class LawyerController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Lawyer::class);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
@@ -45,7 +59,6 @@ class LawyerController extends Controller
             'service_ids.*' => ['exists:services,id'],
         ]);
 
-        $roleId = Role::query()->where('name', 'lawyer')->value('id');
         $this->lawyers->create(
             [
                 'title' => $data['title'] ?? null,
@@ -58,7 +71,6 @@ class LawyerController extends Controller
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'] ?? 'password',
-                'role_id' => $roleId,
             ],
             $data['service_ids'] ?? []
         );
@@ -68,6 +80,8 @@ class LawyerController extends Controller
 
     public function edit(Lawyer $lawyer): View
     {
+        $this->authorize('update', $lawyer);
+
         return view('admin.lawyers.form', [
             'lawyer' => $lawyer->load('user'),
             'services' => Service::query()->active()->orderBy('name')->get(),
@@ -77,6 +91,8 @@ class LawyerController extends Controller
 
     public function update(Request $request, Lawyer $lawyer): RedirectResponse
     {
+        $this->authorize('update', $lawyer);
+
         $data = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],

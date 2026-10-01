@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Firm\FirmContext;
 use App\Models\Call;
 use App\Models\FirmSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,6 +45,7 @@ class VoiceWebhookTest extends TestCase
             'provider_call_id' => 'CA_TEST_123',
             'caller_phone' => '+15551234567',
         ]);
+        app(FirmContext::class)->set((int) FirmSetting::query()->value('id'));
         $this->assertSame(1, Call::query()->count());
         $this->assertNotNull(Call::query()->first()?->aiSession);
     }

@@ -9,14 +9,25 @@ use App\Models\Service;
 use App\Models\ServiceCategory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class ServiceController extends Controller
+class ServiceController extends Controller implements HasMiddleware
 {
     public function __construct(private readonly ServiceCatalogService $catalog) {}
 
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:services.manage'),
+        ];
+    }
+
     public function index(): View
     {
+        $this->authorize('viewAny', Service::class);
+
         return view('admin.services.index', [
             'services' => Service::query()->with('category')->orderBy('name')->paginate(25),
             'categories' => ServiceCategory::query()->orderBy('sort_order')->get(),
@@ -25,6 +36,8 @@ class ServiceController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Service::class);
+
         return view('admin.services.form', [
             'service' => new Service(['booking_enabled' => true, 'ai_enabled' => true, 'status' => 'active', 'currency' => 'USD', 'duration_minutes' => 30]),
             'categories' => ServiceCategory::query()->orderBy('name')->get(),
@@ -35,6 +48,8 @@ class ServiceController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Service::class);
+
         $data = $this->validated($request);
         $service = $this->catalog->createService($data);
         $this->catalog->syncLawyers($service, $request->input('lawyer_ids', []));
@@ -44,6 +59,8 @@ class ServiceController extends Controller
 
     public function edit(Service $service): View
     {
+        $this->authorize('update', $service);
+
         return view('admin.services.form', [
             'service' => $service,
             'categories' => ServiceCategory::query()->orderBy('name')->get(),
@@ -54,6 +71,8 @@ class ServiceController extends Controller
 
     public function update(Request $request, Service $service): RedirectResponse
     {
+        $this->authorize('update', $service);
+
         $this->catalog->updateService($service, $this->validated($request));
         $this->catalog->syncLawyers($service, $request->input('lawyer_ids', []));
 

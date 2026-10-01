@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\LeadStatus;
+use App\Models\Concerns\BelongsToFirm;
+use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,8 +13,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Lead extends Model
 {
+    use BelongsToFirm, RestrictsToAssignedLawyer;
+
     protected $fillable = [
-        'name', 'phone', 'email', 'service_id', 'lawyer_id',
+        'firm_id', 'name', 'phone', 'email', 'service_id', 'lawyer_id',
         'status', 'source', 'notes', 'last_contact_at',
     ];
 

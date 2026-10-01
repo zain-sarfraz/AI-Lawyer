@@ -3,6 +3,7 @@
 namespace App\Domain\Firm;
 
 use App\Domain\Audit\AuditLogService;
+use App\Models\Firm;
 use App\Models\FirmSetting;
 use Illuminate\Support\Facades\DB;
 
@@ -12,14 +13,28 @@ class FirmService
 
     public function current(): FirmSetting
     {
-        return FirmSetting::query()->firstOr(function () {
-            return FirmSetting::query()->create([
-                'firm_name' => 'Law Firm',
-                'timezone' => config('app.timezone', 'UTC'),
-                'currency' => 'USD',
-                'receptionist_name' => 'Virtual Receptionist',
-            ]);
-        });
+        $contextId = app(FirmContext::class)->id();
+        if ($contextId !== null) {
+            $firm = FirmSetting::query()->find($contextId);
+            if ($firm instanceof FirmSetting) {
+                return $firm;
+            }
+        }
+
+        $existing = FirmSetting::query()->first();
+        if ($existing instanceof FirmSetting) {
+            return $existing;
+        }
+
+        $created = FirmSetting::query()->create([
+            'firm_name' => 'Law Firm',
+            'timezone' => Firm::DEFAULT_TIMEZONE,
+            'currency' => 'USD',
+            'receptionist_name' => 'Virtual Receptionist',
+        ]);
+        app(FirmContext::class)->set($created->id);
+
+        return $created;
     }
 
     public function update(array $data): FirmSetting

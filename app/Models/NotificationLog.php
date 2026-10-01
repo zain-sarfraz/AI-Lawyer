@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class NotificationLog extends Model
 {
+    use \App\Models\Concerns\BelongsToFirm;
+
     protected $table = 'notifications';
 
     protected $fillable = [
-        'type', 'channel', 'recipient', 'related_type', 'related_id',
+        'firm_id', 'type', 'channel', 'recipient', 'related_type', 'related_id',
         'status', 'provider_id', 'error_message',
     ];
 
