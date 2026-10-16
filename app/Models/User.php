@@ -53,8 +53,23 @@ class User extends Authenticatable
         return $this->hasAnyRole(['Owner', 'Admin']);
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('Superadmin');
+    }
+
+    public function isPlatformUser(): bool
+    {
+        return $this->firm_id === null && $this->isSuperAdmin();
+    }
+
     public function isActive(): bool
     {
         return $this->status === UserStatus::Active;
+    }
+
+    public function homeRoute(): string
+    {
+        return $this->isSuperAdmin() ? 'superadmin.dashboard' : 'dashboard';
     }
 }

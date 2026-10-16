@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AiToolController;
 use App\Http\Controllers\Api\AppointmentApiController;
 use App\Http\Controllers\Api\CallApiController;
+use App\Http\Controllers\Api\FineTunerToolController;
 use App\Http\Controllers\Api\LeadApiController;
 use App\Http\Controllers\Api\ServiceApiController;
 use Illuminate\Support\Facades\Route;
@@ -25,4 +26,6 @@ Route::middleware('voice.gateway')->group(function () {
     Route::get('/ai/context', [AiToolController::class, 'context']);
     Route::post('/ai/tools/invoke', [AiToolController::class, 'invoke']);
     Route::post('/ai/calls/complete', [AiToolController::class, 'completeCall']);
+    Route::post('/ai/finetuner/tools/{tool}', [FineTunerToolController::class, 'invoke']);
+    Route::post('/ai/synthflow/tools/{tool}', [FineTunerToolController::class, 'invoke']);
 });

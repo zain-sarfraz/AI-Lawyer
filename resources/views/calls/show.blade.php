@@ -3,23 +3,7 @@
 @section('content')
 @php
     $duration = $call->duration_seconds ? gmdate('i:s', $call->duration_seconds) : '—';
-    $transcript = trim((string) $call->transcript);
-    $lines = [];
-    if ($transcript !== '') {
-        foreach (preg_split("/\r\n|\n|\r/", $transcript) as $raw) {
-            $raw = trim($raw);
-            if ($raw === '') {
-                continue;
-            }
-            if (preg_match('/^(AI|Assistant|Receptionist)\s*[:\-]\s*(.+)$/i', $raw, $m)) {
-                $lines[] = ['role' => 'ai', 'text' => $m[2]];
-            } elseif (preg_match('/^(Caller|User|Human|Client)\s*[:\-]\s*(.+)$/i', $raw, $m)) {
-                $lines[] = ['role' => 'caller', 'text' => $m[2]];
-            } else {
-                $lines[] = ['role' => 'caller', 'text' => $raw];
-            }
-        }
-    }
+    $lines = \App\Support\CallTranscript::toLines($call->transcript);
 @endphp
 
 <x-legal.page-header title="Call detail" :subtitle="$call->caller_phone . ' · ' . ($call->started_at?->format('M j, Y g:i A') ?: 'Unknown time')" />

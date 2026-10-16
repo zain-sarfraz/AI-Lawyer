@@ -14,27 +14,16 @@ class FirmService
     public function current(): FirmSetting
     {
         $contextId = app(FirmContext::class)->id();
-        if ($contextId !== null) {
-            $firm = FirmSetting::query()->find($contextId);
-            if ($firm instanceof FirmSetting) {
-                return $firm;
-            }
+        if ($contextId === null) {
+            throw new \RuntimeException('No firm context is set. Firm workspace routes require a firm member.');
         }
 
-        $existing = FirmSetting::query()->first();
-        if ($existing instanceof FirmSetting) {
-            return $existing;
+        $firm = FirmSetting::query()->find($contextId);
+        if (! $firm instanceof FirmSetting) {
+            throw new \RuntimeException('Firm workspace not found for the current context.');
         }
 
-        $created = FirmSetting::query()->create([
-            'firm_name' => 'Law Firm',
-            'timezone' => Firm::DEFAULT_TIMEZONE,
-            'currency' => 'USD',
-            'receptionist_name' => 'Virtual Receptionist',
-        ]);
-        app(FirmContext::class)->set($created->id);
-
-        return $created;
+        return $firm;
     }
 
     public function update(array $data): FirmSetting

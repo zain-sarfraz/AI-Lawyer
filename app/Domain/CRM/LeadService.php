@@ -53,9 +53,14 @@ class LeadService
         return $lead->fresh();
     }
 
-    public function findByPhone(?string $phone): ?Lead
+    public function findByPhone(mixed $phone): ?Lead
     {
-        if (! $phone) {
+        if (is_array($phone)) {
+            $phone = (string) ($phone['value'] ?? $phone['number'] ?? $phone['phone'] ?? reset($phone) ?? '');
+        }
+
+        $phone = is_string($phone) ? trim($phone) : '';
+        if ($phone === '') {
             return null;
         }
 
@@ -70,6 +75,16 @@ class LeadService
 
     public function createOrUpdateFromCaller(array $data): Lead
     {
+        if (isset($data['phone']) && is_array($data['phone'])) {
+            $data['phone'] = (string) ($data['phone']['value'] ?? $data['phone']['number'] ?? $data['phone']['phone'] ?? reset($data['phone']) ?? '');
+        }
+        if (isset($data['name']) && is_array($data['name'])) {
+            $data['name'] = (string) ($data['name']['value'] ?? reset($data['name']) ?? '');
+        }
+        if (isset($data['email']) && is_array($data['email'])) {
+            $data['email'] = (string) ($data['email']['value'] ?? reset($data['email']) ?? '');
+        }
+
         return DB::transaction(function () use ($data) {
             $existing = $this->findByPhone($data['phone'] ?? null);
             if ($existing) {

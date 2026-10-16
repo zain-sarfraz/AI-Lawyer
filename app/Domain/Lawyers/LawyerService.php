@@ -20,6 +20,7 @@ class LawyerService
                     'email' => $userData['email'],
                     'password' => $userData['password'] ?? 'password',
                     'status' => 'active',
+                    'email_verified_at' => now(),
                 ]);
                 $user->assignRole('Lawyer');
                 $data['user_id'] = $user->id;
@@ -35,7 +36,7 @@ class LawyerService
         });
     }
 
-    public function update(Lawyer $lawyer, array $data, array $serviceIds = null): Lawyer
+    public function update(Lawyer $lawyer, array $data, ?array $serviceIds = null): Lawyer
     {
         $old = $lawyer->toArray();
         $lawyer->fill($data)->save();
@@ -45,5 +46,21 @@ class LawyerService
         $this->audit->log('lawyer.updated', $lawyer, $old, $lawyer->fresh()->toArray());
 
         return $lawyer->fresh()->load('user', 'services');
+    }
+
+    public function delete(Lawyer $lawyer): string
+    {
+        return DB::transaction(function () use ($lawyer) {
+            $old = $lawyer->toArray();
+
+            $lawyer->services()->detach();
+            $lawyer->appointments()->delete();
+            $user = $lawyer->user;
+            $lawyer->delete();
+            $user?->delete();
+            $this->audit->log('lawyer.deleted', null, $old, null);
+
+            return 'Lawyer deleted.';
+        });
     }
 }

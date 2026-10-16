@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Domain\Firm\FirmContext;
-use App\Models\Firm;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -19,14 +18,10 @@ class SetFirmContext
     {
         if ($this->firms->id() === null) {
             $user = $request->user();
-            $header = $request->header('X-Firm-Id');
 
-            if ($user instanceof User) {
-                $this->firms->set($user->firm_id);
-            } elseif (is_numeric($header)) {
-                $this->firms->set((int) $header);
-            } elseif (Firm::query()->count() === 1) {
-                $this->firms->set((int) Firm::query()->orderBy('id')->value('id'));
+            // Superadmin stays firm-less so FirmScope blocks all tenant CRM data.
+            if ($user instanceof User && ! $user->isSuperAdmin() && $user->firm_id !== null) {
+                $this->firms->set((int) $user->firm_id);
             }
         }
 

@@ -38,10 +38,14 @@ final class BookingResult
             'appointment' => $this->appointment ? [
                 'id' => $this->appointment->id,
                 'lawyer_id' => $this->appointment->lawyer_id,
+                'lead_id' => $this->appointment->lead_id,
+                'client_id' => $this->appointment->client_id,
+                'call_id' => $this->appointment->call_id,
                 'service_id' => $this->appointment->service_id,
                 'start_at' => $this->appointment->start_at?->toIso8601String(),
                 'end_at' => $this->appointment->end_at?->toIso8601String(),
                 'status' => $this->appointment->status?->value,
+                'source' => $this->appointment->source,
             ] : null,
             'alternatives' => $this->alternatives,
         ];

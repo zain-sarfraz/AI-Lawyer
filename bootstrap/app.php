@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Middleware\EnsureFirmMember;
 use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\EnsureSuperadmin;
 use App\Http\Middleware\SetFirmContext;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\VerifyTwilioSignature;
@@ -26,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
+            'firm' => EnsureFirmMember::class,
+            'superadmin' => EnsureSuperadmin::class,
             'permission' => EnsurePermission::class,
             'twilio.signature' => VerifyTwilioSignature::class,
             'voice.gateway' => VerifyVoiceGatewaySecret::class,

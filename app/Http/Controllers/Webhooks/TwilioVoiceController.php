@@ -114,7 +114,9 @@ XML;
         $firmId = $to !== ''
             ? Firm::query()->where('twilio_phone_number', $to)->value('id')
             : null;
-        $firmId ??= Firm::query()->orderBy('id')->value('id');
+        if ($firmId === null && app()->environment('local', 'testing')) {
+            $firmId = Firm::query()->orderBy('id')->value('id');
+        }
         if ($firmId !== null) {
             $firms->set((int) $firmId);
         }

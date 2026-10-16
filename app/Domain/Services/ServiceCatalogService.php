@@ -40,4 +40,29 @@ class ServiceCatalogService
     {
         $service->lawyers()->sync($lawyerIds);
     }
+
+    public function delete(Service $service): string
+    {
+        return DB::transaction(function () use ($service) {
+            $old = $service->toArray();
+
+            if ($service->appointments()->exists()) {
+                $service->update([
+                    'status' => 'inactive',
+                    'booking_enabled' => false,
+                    'ai_enabled' => false,
+                ]);
+                $this->audit->log('service.deactivated', $service, $old, $service->fresh()->toArray());
+
+                return 'Service has appointments, so it was set inactive instead of deleted.';
+            }
+
+            $service->lawyers()->detach();
+            $service->clients()->detach();
+            $service->delete();
+            $this->audit->log('service.deleted', null, $old, null);
+
+            return 'Service deleted.';
+        });
+    }
 }

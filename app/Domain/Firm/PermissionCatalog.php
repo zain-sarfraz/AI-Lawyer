@@ -16,6 +16,12 @@ class PermissionCatalog
     public static function permissions(): array
     {
         return [
+            // Platform (Superadmin only — never grants firm CRM access)
+            'platform.dashboard.view' => 'View platform dashboard',
+            'platform.firms.manage' => 'Manage firms',
+            'platform.admins.manage' => 'Create and manage firm admins',
+
+            // Firm CRM
             'firm.settings.manage' => 'Manage firm settings',
             'users.manage' => 'Manage users',
             'lawyers.manage' => 'Manage lawyers',
@@ -25,6 +31,10 @@ class PermissionCatalog
             'leads.manage' => 'Manage leads',
             'clients.view' => 'View clients',
             'clients.manage' => 'Manage clients',
+            'cases.view' => 'View cases',
+            'cases.manage' => 'Manage cases',
+            'documents.view' => 'View CRM documents',
+            'documents.manage' => 'Manage CRM documents',
             'appointments.view' => 'View appointments',
             'appointments.manage' => 'Manage appointments',
             'calls.view' => 'View calls',
@@ -42,16 +52,27 @@ class PermissionCatalog
      */
     public static function matrix(): array
     {
-        $all = array_keys(self::permissions());
+        $firmPermissions = array_values(array_filter(
+            array_keys(self::permissions()),
+            fn (string $name) => ! str_starts_with($name, 'platform.')
+        ));
 
         return [
-            'Owner' => $all,
-            'Admin' => $all,
+            'Superadmin' => [
+                'platform.dashboard.view',
+                'platform.firms.manage',
+                'platform.admins.manage',
+            ],
+            'Owner' => $firmPermissions,
+            'Admin' => $firmPermissions,
             'Lawyer' => [
-                'leads.view',
-                'clients.view',
+                // No leads/clients menu — clients appear via their appointments & cases.
+                // Lawyers can view appointments but cannot book (Admin / AI agent only).
+                'cases.view',
+                'cases.manage',
+                'documents.view',
+                'documents.manage',
                 'appointments.view',
-                'appointments.manage',
                 'calls.view',
                 'schedules.manage',
                 'reports.view',
@@ -61,6 +82,10 @@ class PermissionCatalog
                 'leads.manage',
                 'clients.view',
                 'clients.manage',
+                'cases.view',
+                'cases.manage',
+                'documents.view',
+                'documents.manage',
                 'appointments.view',
                 'appointments.manage',
                 'calls.view',

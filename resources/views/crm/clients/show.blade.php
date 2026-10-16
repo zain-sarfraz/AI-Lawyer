@@ -1,24 +1,26 @@
 @extends('layouts.app')
 
-@section('actions')
-<a class="ui-btn ui-btn-ghost" href="{{ route('clients.edit', $client) }}">Edit</a>
-@endsection
-
 @section('content')
-<x-legal.page-header :title="$client->name" subtitle="Client overview and matter history" />
-
-<div class="legal-tabs mb-3">
-    <a href="#overview" class="active">Overview</a>
-    <a href="#appointments">Appointments</a>
-    <a href="#leads">Linked leads</a>
-</div>
+<x-legal.page-header :title="$client->name" :subtitle="($client->client_number ?: 'Client').' · AI Lawyer matter record'">
+    <x-slot:actions>
+        <a class="ui-btn ui-btn-ghost" href="{{ route('clients.edit', $client) }}">Edit</a>
+    </x-slot:actions>
+</x-legal.page-header>
 
 <div class="row g-3">
-    <div class="col-lg-7" id="overview">
-        <x-legal.card title="Client overview">
+    <div class="col-lg-7">
+        <x-legal.card title="Client details">
             <div class="legal-meta-grid">
                 <div class="legal-meta-item">
-                    <label>Phone</label>
+                    <label>Name</label>
+                    <div>{{ $client->name }}</div>
+                </div>
+                <div class="legal-meta-item">
+                    <label>Client number</label>
+                    <div>{{ $client->client_number ?: '—' }}</div>
+                </div>
+                <div class="legal-meta-item">
+                    <label>Phone number</label>
                     <div>{{ $client->phone ?: '—' }}</div>
                 </div>
                 <div class="legal-meta-item">
@@ -30,21 +32,19 @@
                     <div><x-legal.badge tone="navy">{{ $client->status?->value }}</x-legal.badge></div>
                 </div>
                 <div class="legal-meta-item">
-                    <label>Created</label>
-                    <div>{{ $client->created_at?->format('M j, Y') ?: '—' }}</div>
+                    <label>Services</label>
+                    <div>{{ $client->services->pluck('name')->join(', ') ?: '—' }}</div>
                 </div>
             </div>
-            @if($client->notes)
-                <hr class="my-3" style="border-color:var(--line);opacity:1">
-                <div class="legal-meta-item">
-                    <label>Notes</label>
-                    <div style="font-weight:500;white-space:pre-wrap">{{ $client->notes }}</div>
-                </div>
-            @endif
+            <hr class="my-3" style="border-color:var(--line);opacity:1">
+            <div class="legal-meta-item">
+                <label>Notes</label>
+                <div style="font-weight:500;white-space:pre-wrap">{{ $client->notes ?: 'No notes yet. Edit the client to add notes.' }}</div>
+            </div>
         </x-legal.card>
     </div>
 
-    <div class="col-lg-5" id="leads">
+    <div class="col-lg-5">
         <x-legal.card title="Linked leads">
             @forelse($client->leads as $lead)
                 <div class="legal-list-item">
@@ -60,7 +60,7 @@
         </x-legal.card>
     </div>
 
-    <div class="col-12" id="appointments">
+    <div class="col-12">
         <x-legal.card title="Appointments">
             <div class="ui-table-wrap">
                 <table class="ui-table">

@@ -11,9 +11,6 @@
         <x-legal.card title="Update password" class="mb-3">
             @include('profile.partials.update-password-form')
         </x-legal.card>
-        <x-legal.card title="Danger zone">
-            @include('profile.partials.delete-user-form')
-        </x-legal.card>
     </div>
 </div>
 @endsection

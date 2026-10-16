@@ -32,18 +32,17 @@ class LeadController extends Controller implements HasMiddleware
         return view('crm.leads.index', [
             'leads' => $this->leads->list($request->only('q', 'status')),
             'filters' => $request->only('q', 'status'),
+            'formLead' => new Lead(),
+            'formServices' => Service::query()->active()->orderBy('name')->get(),
+            'formLawyers' => Lawyer::query()->active()->with('user')->get(),
         ]);
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
         $this->authorize('create', Lead::class);
 
-        return view('crm.leads.form', [
-            'lead' => new Lead(),
-            'services' => Service::query()->active()->orderBy('name')->get(),
-            'lawyers' => Lawyer::query()->active()->with('user')->get(),
-        ]);
+        return redirect()->route('leads.index', ['open' => 'create-lead']);
     }
 
     public function store(Request $request): RedirectResponse
@@ -72,7 +71,7 @@ class LeadController extends Controller implements HasMiddleware
         $lead->load([
             'service',
             'lawyer.user',
-            'appointments' => fn ($q) => $q->latest('start_at'),
+            'appointments' => fn ($q) => $q->latest('id'),
             'calls' => fn ($q) => $q->latest('started_at')->limit(10),
             'notesRelation' => fn ($q) => $q->latest()->limit(10),
         ]);

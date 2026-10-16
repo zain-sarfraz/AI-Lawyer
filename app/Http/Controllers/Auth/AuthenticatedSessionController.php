@@ -28,7 +28,25 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        $user = $request->user();
+        $home = $user?->homeRoute() ?? 'dashboard';
+        $homeUrl = route($home, absolute: false);
+
+        // Never send Superadmin into a previously intended firm CRM URL (/dashboard, etc.).
+        if ($user?->isSuperAdmin()) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->to($homeUrl);
+        }
+
+        $intended = $request->session()->pull('url.intended');
+        if (is_string($intended) && str_contains($intended, '/superadmin')) {
+            return redirect()->to($homeUrl);
+        }
+
+        return $intended
+            ? redirect()->to($intended)
+            : redirect()->to($homeUrl);
     }
 
     /**

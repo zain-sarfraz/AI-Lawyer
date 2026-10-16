@@ -6,6 +6,7 @@ use App\Enums\EntityStatus;
 use App\Models\Concerns\BelongsToFirm;
 use App\Models\Concerns\RestrictsToAssignedLawyer;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +16,7 @@ class Lawyer extends Model
     use BelongsToFirm, RestrictsToAssignedLawyer;
 
     protected $fillable = [
-        'firm_id', 'user_id', 'title', 'bio', 'specialties', 'timezone', 'status',
+        'firm_id', 'user_id', 'title', 'phone', 'experience', 'bio', 'specialties', 'timezone', 'status', 'slug',
     ];
 
     protected function casts(): array
@@ -24,6 +25,19 @@ class Lawyer extends Model
             'specialties' => 'array',
             'status' => EntityStatus::class,
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Lawyer $lawyer): void {
+            if (! empty($lawyer->slug)) {
+                return;
+            }
+
+            $name = User::query()->withoutGlobalScopes()->whereKey($lawyer->user_id)->value('name');
+            $base = Str::slug((string) $name) ?: 'lawyer';
+            $lawyer->slug = $base.'-'.$lawyer->user_id;
+        });
     }
 
     public function user(): BelongsTo
@@ -53,7 +67,7 @@ class Lawyer extends Model
 
     public function appointments(): HasMany
     {
-        return $this->hasMany(Appointment::class);
+        return $this->hasMany(Appointment::class)->latest('id');
     }
 
     public function displayName(): string

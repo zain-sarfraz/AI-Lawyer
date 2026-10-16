@@ -99,7 +99,7 @@ class TenantIsolationTest extends TestCase
                 'service_id' => $service->id,
                 'start_at' => $start,
                 'end_at' => $start->copy()->addMinutes(30),
-                'status' => 'scheduled',
+                'status' => 'pending',
                 'notes' => 'Own calendar matter',
             ]);
             $otherAppointment = Appointment::query()->create([
@@ -107,7 +107,7 @@ class TenantIsolationTest extends TestCase
                 'service_id' => $service->id,
                 'start_at' => $start->copy()->addHour(),
                 'end_at' => $start->copy()->addHour()->addMinutes(30),
-                'status' => 'scheduled',
+                'status' => 'pending',
                 'notes' => 'Other lawyer matter',
             ]);
 

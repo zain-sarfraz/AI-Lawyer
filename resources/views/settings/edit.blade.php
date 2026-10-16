@@ -3,13 +3,7 @@
 @section('content')
 <x-legal.page-header title="Settings" subtitle="Firm profile, AI persona, scheduling, and encrypted integrations" />
 
-<nav class="legal-settings-nav">
-    <a href="#general" class="is-active">General</a>
-    <a href="#ai">AI Receptionist</a>
-    <a href="#scheduling">Scheduling</a>
-    <a href="#calls">Call settings</a>
-    <a href="#integrations">Integrations</a>
-</nav>
+
 
 <div class="row g-3">
     <div class="col-lg-8">
@@ -155,7 +149,7 @@
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                 </select>
-                <button class="ui-btn ui-btn-ghost w-100">Save integration</button>
+                <button class="ui-btn ui-btn-ghost w-full">Save integration</button>
             </form>
 
             <ul class="list-unstyled small mb-0">

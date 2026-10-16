@@ -5,6 +5,7 @@ namespace App\Domain\Calls;
 use App\Jobs\EnrichCallAfterCompleteJob;
 use App\Models\AiSession;
 use App\Models\Call;
+use App\Support\CallTranscript;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class CallService
@@ -46,12 +47,16 @@ class CallService
 
     public function complete(Call $call, array $data = []): Call
     {
+        $transcript = array_key_exists('transcript', $data)
+            ? CallTranscript::normalize($data['transcript'])
+            : $call->transcript;
+
         $call->fill([
             'ended_at' => $data['ended_at'] ?? now(),
             'duration_seconds' => $data['duration_seconds'] ?? $call->duration_seconds,
             'status' => $data['status'] ?? 'completed',
             'recording_url' => $data['recording_url'] ?? $call->recording_url,
-            'transcript' => $data['transcript'] ?? $call->transcript,
+            'transcript' => $transcript !== '' ? $transcript : $call->transcript,
             'summary' => $data['summary'] ?? $call->summary,
             'intent' => $data['intent'] ?? $call->intent,
             'outcome' => $data['outcome'] ?? $call->outcome,

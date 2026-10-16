@@ -40,7 +40,7 @@ class Lead extends Model
 
     public function appointments(): HasMany
     {
-        return $this->hasMany(Appointment::class);
+        return $this->hasMany(Appointment::class)->latest('id');
     }
 
     public function calls(): HasMany

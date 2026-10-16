@@ -4,19 +4,18 @@ namespace App\Enums;
 
 enum AppointmentStatus: string
 {
-    case Scheduled = 'scheduled';
+    case Pending = 'pending';
     case Confirmed = 'confirmed';
-    case InProgress = 'in_progress';
     case Completed = 'completed';
-    case Cancelled = 'cancelled';
     case NoShow = 'no_show';
+    case Cancelled = 'cancelled';
+    case Rescheduled = 'rescheduled';
 
     public function isBlocking(): bool
     {
         return in_array($this, [
-            self::Scheduled,
+            self::Pending,
             self::Confirmed,
-            self::InProgress,
         ], true);
     }
 

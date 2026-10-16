@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('actions')
-<a href="{{ route('leads.edit', $lead) }}" class="ui-btn ui-btn-ghost">Edit</a>
-@endsection
-
 @section('content')
-<x-legal.page-header :title="$lead->name ?: 'Lead'" subtitle="Intake profile, history, and next actions" />
+<x-legal.page-header :title="$lead->name ?: 'Lead'" subtitle="Intake profile, history, and next actions">
+    <x-slot:actions>
+        <a href="{{ route('leads.edit', $lead) }}" class="ui-btn ui-btn-ghost">Edit</a>
+    </x-slot:actions>
+</x-legal.page-header>
 
 <div class="row g-3">
     <div class="col-lg-8">

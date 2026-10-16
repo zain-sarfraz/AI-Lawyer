@@ -31,57 +31,62 @@ class ServiceController extends Controller implements HasMiddleware
         return view('admin.services.index', [
             'services' => Service::query()->with('category')->orderBy('name')->paginate(25),
             'categories' => ServiceCategory::query()->orderBy('sort_order')->get(),
+            'formService' => new Service(['booking_enabled' => true, 'ai_enabled' => true, 'status' => 'active', 'currency' => 'USD', 'duration_minutes' => 30]),
+            'formCategories' => ServiceCategory::query()->orderBy('name')->get(),
+            'formLawyers' => Lawyer::query()->active()->with('user')->get(),
         ]);
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
         $this->authorize('create', Service::class);
 
-        return view('admin.services.form', [
-            'service' => new Service(['booking_enabled' => true, 'ai_enabled' => true, 'status' => 'active', 'currency' => 'USD', 'duration_minutes' => 30]),
-            'categories' => ServiceCategory::query()->orderBy('name')->get(),
-            'lawyers' => Lawyer::query()->active()->with('user')->get(),
-            'selectedLawyers' => [],
-        ]);
+        return redirect()->route('services.index', ['open' => 'create-service']);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $this->authorize('create', Service::class);
 
-        $data = $this->validated($request);
-        $service = $this->catalog->createService($data);
-        $this->catalog->syncLawyers($service, $request->input('lawyer_ids', []));
+        $this->catalog->createService($this->validated($request, [
+            'booking_enabled' => true,
+            'ai_enabled' => true,
+        ]));
 
         return redirect()->route('services.index')->with('success', 'Service created.');
     }
 
-    public function edit(Service $service): View
+    public function edit(Service $service): RedirectResponse
     {
         $this->authorize('update', $service);
 
-        return view('admin.services.form', [
-            'service' => $service,
-            'categories' => ServiceCategory::query()->orderBy('name')->get(),
-            'lawyers' => Lawyer::query()->active()->with('user')->get(),
-            'selectedLawyers' => $service->lawyers()->pluck('lawyers.id')->all(),
-        ]);
+        return redirect()->route('services.index', ['open' => 'edit-service-'.$service->id]);
     }
 
     public function update(Request $request, Service $service): RedirectResponse
     {
         $this->authorize('update', $service);
 
-        $this->catalog->updateService($service, $this->validated($request));
-        $this->catalog->syncLawyers($service, $request->input('lawyer_ids', []));
+        $this->catalog->updateService($service, $this->validated($request, [
+            'booking_enabled' => (bool) $service->booking_enabled,
+            'ai_enabled' => (bool) $service->ai_enabled,
+        ]));
 
         return redirect()->route('services.index')->with('success', 'Service updated.');
     }
 
-    private function validated(Request $request): array
+    public function destroy(Service $service): RedirectResponse
     {
-        return $request->validate([
+        $this->authorize('delete', $service);
+
+        $message = $this->catalog->delete($service);
+
+        return redirect()->route('services.index')->with('success', $message);
+    }
+
+    private function validated(Request $request, array $defaults = []): array
+    {
+        $data = $request->validate([
             'category_id' => ['nullable', 'exists:service_categories,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -89,12 +94,12 @@ class ServiceController extends Controller implements HasMiddleware
             'currency' => ['required', 'string', 'max:8'],
             'duration_minutes' => ['required', 'integer', 'min:5'],
             'buffer_minutes' => ['nullable', 'integer', 'min:0'],
-            'booking_enabled' => ['sometimes', 'boolean'],
-            'ai_enabled' => ['sometimes', 'boolean'],
             'status' => ['required', 'string'],
-        ]) + [
-            'booking_enabled' => $request->boolean('booking_enabled'),
-            'ai_enabled' => $request->boolean('ai_enabled'),
+        ]);
+
+        return $data + [
+            'booking_enabled' => $defaults['booking_enabled'] ?? true,
+            'ai_enabled' => $defaults['ai_enabled'] ?? true,
         ];
     }
 }

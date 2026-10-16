@@ -6,6 +6,7 @@ use App\Enums\EntityStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Service extends Model
 {
@@ -36,6 +37,16 @@ class Service extends Model
     public function lawyers(): BelongsToMany
     {
         return $this->belongsToMany(Lawyer::class);
+    }
+
+    public function clients(): BelongsToMany
+    {
+        return $this->belongsToMany(Client::class);
+    }
+
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class);
     }
 
     public function scopeActive($query)

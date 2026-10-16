@@ -135,7 +135,7 @@ class DemoDataSeeder extends Seeder
             $client->leads()->attach($lead->id);
 
             if ($i <= 24) {
-                $start = now()->addDays(($i % 10) + 1)->setTime(9 + ($i % 6), ($i % 2) * 30);
+                $start = now()->addDays($i)->setTime(10, 0);
                 Appointment::query()->create([
                     'lawyer_id' => $lawyer->id,
                     'client_id' => $client->id,
@@ -143,7 +143,7 @@ class DemoDataSeeder extends Seeder
                     'service_id' => $service->id,
                     'start_at' => $start,
                     'end_at' => (clone $start)->addMinutes($service->duration_minutes),
-                    'status' => $i % 5 === 0 ? AppointmentStatus::Completed : AppointmentStatus::Scheduled,
+                    'status' => $i % 5 === 0 ? AppointmentStatus::Completed : AppointmentStatus::Pending,
                     'source' => 'demo',
                     'notes' => 'Consultation '.$i,
                 ]);

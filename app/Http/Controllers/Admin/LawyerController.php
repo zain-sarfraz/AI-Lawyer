@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class LawyerController extends Controller implements HasMiddleware
@@ -29,18 +30,16 @@ class LawyerController extends Controller implements HasMiddleware
 
         return view('admin.lawyers.index', [
             'lawyers' => Lawyer::query()->with('user', 'services')->paginate(25),
+            'formLawyer' => new Lawyer(['status' => 'active']),
+            'formServices' => Service::query()->orderBy('name')->get(),
         ]);
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
         $this->authorize('create', Lawyer::class);
 
-        return view('admin.lawyers.form', [
-            'lawyer' => new Lawyer(['status' => 'active']),
-            'services' => Service::query()->active()->orderBy('name')->get(),
-            'selectedServices' => [],
-        ]);
+        return redirect()->route('lawyers.index', ['open' => 'create-lawyer']);
     }
 
     public function store(Request $request): RedirectResponse
@@ -50,6 +49,8 @@ class LawyerController extends Controller implements HasMiddleware
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'experience' => ['nullable', 'string', 'max:255'],
             'password' => ['nullable', 'string', 'min:8'],
             'title' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
@@ -62,6 +63,8 @@ class LawyerController extends Controller implements HasMiddleware
         $this->lawyers->create(
             [
                 'title' => $data['title'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'experience' => $data['experience'] ?? null,
                 'bio' => $data['bio'] ?? null,
                 'timezone' => $data['timezone'] ?? null,
                 'status' => $data['status'],
@@ -78,15 +81,27 @@ class LawyerController extends Controller implements HasMiddleware
         return redirect()->route('lawyers.index')->with('success', 'Lawyer created.');
     }
 
-    public function edit(Lawyer $lawyer): View
+    public function show(Lawyer $lawyer): RedirectResponse
+    {
+        $this->authorize('view', $lawyer);
+
+        return redirect()->route('lawyers.index', ['details' => $lawyer->id]);
+    }
+
+    public function edit(Lawyer $lawyer): RedirectResponse
     {
         $this->authorize('update', $lawyer);
 
-        return view('admin.lawyers.form', [
-            'lawyer' => $lawyer->load('user'),
-            'services' => Service::query()->active()->orderBy('name')->get(),
-            'selectedServices' => $lawyer->services()->pluck('services.id')->all(),
-        ]);
+        return redirect()->route('lawyers.index', ['open' => 'edit-lawyer-'.$lawyer->id]);
+    }
+
+    public function destroy(Lawyer $lawyer): RedirectResponse
+    {
+        $this->authorize('delete', $lawyer);
+
+        $message = $this->lawyers->delete($lawyer);
+
+        return redirect()->route('lawyers.index')->with('success', $message);
     }
 
     public function update(Request $request, Lawyer $lawyer): RedirectResponse
@@ -94,6 +109,11 @@ class LawyerController extends Controller implements HasMiddleware
         $this->authorize('update', $lawyer);
 
         $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($lawyer->user_id)],
+            'password' => ['nullable', 'string', 'min:8'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'experience' => ['nullable', 'string', 'max:255'],
             'title' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
             'timezone' => ['nullable', 'string', 'max:64'],
@@ -101,8 +121,22 @@ class LawyerController extends Controller implements HasMiddleware
             'service_ids' => ['array'],
             'service_ids.*' => ['exists:services,id'],
         ]);
+
+        if ($lawyer->user) {
+            $userUpdates = [
+                'name' => $data['name'],
+                'email' => $data['email'],
+            ];
+            if (! empty($data['password'])) {
+                $userUpdates['password'] = $data['password'];
+            }
+            $lawyer->user->update($userUpdates);
+        }
+
         $this->lawyers->update($lawyer, [
             'title' => $data['title'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'experience' => $data['experience'] ?? null,
             'bio' => $data['bio'] ?? null,
             'timezone' => $data['timezone'] ?? null,
             'status' => $data['status'],

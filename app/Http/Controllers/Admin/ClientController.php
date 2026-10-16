@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\CRM\ClientService;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -19,7 +20,7 @@ class ClientController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('permission:clients.view', only: ['index', 'show']),
-            new Middleware('permission:clients.manage', only: ['create', 'store', 'edit', 'update']),
+            new Middleware('permission:clients.manage', only: ['create', 'store', 'edit', 'update', 'updateStatus', 'destroy']),
         ];
     }
 
@@ -30,14 +31,16 @@ class ClientController extends Controller implements HasMiddleware
         return view('crm.clients.index', [
             'clients' => $this->clients->list($request->only('q')),
             'filters' => $request->only('q'),
+            'formClient' => new Client(['status' => 'active']),
+            'formServices' => Service::query()->active()->orderBy('name')->get(),
         ]);
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
         $this->authorize('create', Client::class);
 
-        return view('crm.clients.form', ['client' => new Client()]);
+        return redirect()->route('clients.index', ['open' => 'create-client']);
     }
 
     public function store(Request $request): RedirectResponse
@@ -46,30 +49,35 @@ class ClientController extends Controller implements HasMiddleware
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'client_number' => ['nullable', 'string', 'max:64'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'status' => ['required', 'string'],
             'notes' => ['nullable', 'string'],
+            'service_ids' => ['nullable', 'array'],
+            'service_ids.*' => ['exists:services,id'],
         ]);
-        $client = $this->clients->create($data);
 
-        return redirect()->route('clients.show', $client)->with('success', 'Client created.');
+        $this->clients->create(
+            collect($data)->except('service_ids')->all(),
+            $data['service_ids'] ?? [],
+        );
+
+        return redirect()->route('clients.index')->with('success', 'Client created.');
     }
 
-    public function show(Client $client): View
+    public function show(Client $client): RedirectResponse
     {
         $this->authorize('view', $client);
 
-        $client->load(['appointments.service', 'leads']);
-
-        return view('crm.clients.show', compact('client'));
+        return redirect()->route('clients.index', ['details' => $client->id]);
     }
 
-    public function edit(Client $client): View
+    public function edit(Client $client): RedirectResponse
     {
         $this->authorize('update', $client);
 
-        return view('crm.clients.form', compact('client'));
+        return redirect()->route('clients.index', ['open' => 'edit-client-'.$client->id]);
     }
 
     public function update(Request $request, Client $client): RedirectResponse
@@ -78,13 +86,43 @@ class ClientController extends Controller implements HasMiddleware
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'client_number' => ['nullable', 'string', 'max:64'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'status' => ['required', 'string'],
             'notes' => ['nullable', 'string'],
+            'service_ids' => ['nullable', 'array'],
+            'service_ids.*' => ['exists:services,id'],
         ]);
-        $this->clients->update($client, $data);
 
-        return redirect()->route('clients.show', $client)->with('success', 'Client updated.');
+        $this->clients->update(
+            $client,
+            collect($data)->except('service_ids')->all(),
+            $data['service_ids'] ?? [],
+        );
+
+        return redirect()->route('clients.index')->with('success', 'Client updated.');
+    }
+
+    public function updateStatus(Request $request, Client $client): RedirectResponse
+    {
+        $this->authorize('update', $client);
+
+        $data = $request->validate([
+            'status' => ['required', 'in:active,inactive'],
+        ]);
+
+        $this->clients->updateStatus($client, $data['status']);
+
+        return back()->with('success', 'Client marked '.$data['status'].'.');
+    }
+
+    public function destroy(Client $client): RedirectResponse
+    {
+        $this->authorize('delete', $client);
+
+        $message = $this->clients->delete($client);
+
+        return redirect()->route('clients.index')->with('success', $message);
     }
 }

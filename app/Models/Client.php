@@ -15,7 +15,7 @@ class Client extends Model
     use BelongsToFirm, RestrictsToAssignedLawyer;
 
     protected $fillable = [
-        'firm_id', 'name', 'phone', 'email', 'status', 'notes',
+        'firm_id', 'name', 'client_number', 'phone', 'email', 'status', 'notes',
     ];
 
     protected function casts(): array
@@ -25,14 +25,32 @@ class Client extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (Client $client): void {
+            if (filled($client->client_number)) {
+                return;
+            }
+
+            $firmId = (int) ($client->firm_id ?: 0);
+            $seq = static::query()->withoutGlobalScopes()->where('firm_id', $firmId)->count() + 1;
+            $client->client_number = 'CL-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        });
+    }
+
     public function leads(): BelongsToMany
     {
         return $this->belongsToMany(Lead::class, 'client_lead_links');
     }
 
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class);
+    }
+
     public function appointments(): HasMany
     {
-        return $this->hasMany(Appointment::class);
+        return $this->hasMany(Appointment::class)->latest('id');
     }
 
     public function notesRelation(): MorphMany
