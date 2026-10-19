@@ -88,6 +88,7 @@
   window.bindAppointmentSlotForms = bindAllSlotForms;
 
   document.addEventListener('DOMContentLoaded', bindAllSlotForms);
+  document.addEventListener('turbo:load', bindAllSlotForms);
   window.addEventListener('bind-appt-slots', bindAllSlotForms);
 
   window.addEventListener('open-modal', (event) => {

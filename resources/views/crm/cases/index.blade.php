@@ -19,6 +19,13 @@
         </x-slot:actions>
     </x-legal.page-header>
 
+    @if(session('success'))
+        <div class="ui-alert ui-alert-success mb-3">{{ session('success') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="ui-alert ui-alert-danger mb-3">{{ $errors->first() }}</div>
+    @endif
+
     <div class="legal-toolbar">
         <div class="legal-toolbar-search">
             <input
@@ -75,6 +82,7 @@
                             'description' => (string) ($case->description ?? ''),
                             'files' => $files,
                             'update_url' => route('cases.notes', $case),
+                            'upload_url' => route('cases.attachments', $case),
                         ];
                     @endphp
                     <tr data-search="{{ $search }}" data-status="{{ $status }}">

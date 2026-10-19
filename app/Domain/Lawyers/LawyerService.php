@@ -5,6 +5,7 @@ namespace App\Domain\Lawyers;
 use App\Domain\Audit\AuditLogService;
 use App\Models\Lawyer;
 use App\Models\User;
+use App\Models\WorkingHour;
 use Illuminate\Support\Facades\DB;
 
 class LawyerService
@@ -30,6 +31,18 @@ class LawyerService
             if ($serviceIds) {
                 $lawyer->services()->sync($serviceIds);
             }
+
+            // Default weekly windows (Mon–Fri 09:00–17:00). Lawyers can edit under Availability.
+            foreach ([1, 2, 3, 4, 5] as $dayOfWeek) {
+                WorkingHour::query()->create([
+                    'lawyer_id' => $lawyer->id,
+                    'day_of_week' => $dayOfWeek,
+                    'start_time' => '09:00:00',
+                    'end_time' => '17:00:00',
+                    'status' => 'active',
+                ]);
+            }
+
             $this->audit->log('lawyer.created', $lawyer, null, $lawyer->toArray());
 
             return $lawyer->load('user', 'services');

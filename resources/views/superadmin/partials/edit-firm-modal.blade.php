@@ -12,7 +12,7 @@
             firm_name: '',
             email: '',
             phone: '',
-            timezone: 'America/New_York',
+            timezone: 'Asia/Karachi',
             currency: 'USD',
             status: 'active',
             fill(detail) {
@@ -20,7 +20,7 @@
                 this.firm_name = detail.firm_name || '';
                 this.email = detail.email || '';
                 this.phone = detail.phone || '';
-                this.timezone = detail.timezone || 'America/New_York';
+                this.timezone = detail.timezone || 'Asia/Karachi';
                 this.currency = detail.currency || 'USD';
                 this.status = detail.status || 'active';
             }

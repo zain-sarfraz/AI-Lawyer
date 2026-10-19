@@ -7,10 +7,11 @@
     <title>{{ config('app.name', 'AI Lawyer') }} — @yield('title', 'Platform')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-full antialiased" x-data="{ mobileOpen: false }">
@@ -31,10 +32,10 @@
     <aside class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-white/5 bg-navy-900 text-slate-200 transition lg:sticky lg:top-0 lg:h-screen"
            :class="mobileOpen ? 'translate-x-0' : '-translate-x-full max-lg:invisible lg:visible lg:translate-x-0'">
         <div class="flex items-center gap-3 px-4 py-5">
-            <div class="grid h-10 w-10 place-items-center rounded-full bg-teal-500 text-sm font-extrabold text-navy-950">SA</div>
+            <div class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-sm font-extrabold text-white shadow-[0_0_0_3px_rgba(18,138,130,0.25)]">SA</div>
             <div>
-                <div class="text-lg font-extrabold leading-none tracking-tight text-white">Superadmin</div>
-                <div class="mt-1 text-[11px] uppercase tracking-[0.16em] text-teal-400">Platform</div>
+                <div class="font-display text-lg font-semibold leading-none tracking-tight text-white">Superadmin</div>
+                <div class="mt-1 text-[11px] uppercase tracking-[0.16em] text-gold-400">AI Lawyer</div>
             </div>
         </div>
 
@@ -42,7 +43,7 @@
             @foreach($nav as $item)
                 @php $active = request()->routeIs($item['match']); @endphp
                 <a href="{{ route($item['route']) }}"
-                   class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition {{ $active ? 'bg-teal-500/20 text-teal-300' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                   class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition {{ $active ? 'bg-teal-500/15 text-teal-300 shadow-[inset_3px_0_0_0_#128a82]' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                     <x-ui.icon :name="$item['icon']" />
                     <span>{{ $item['label'] }}</span>
                 </a>
@@ -63,10 +64,11 @@
             <x-ui.icon name="chevron-right" />
         </button>
 
-        <main class="app-main mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 py-6 pt-14 sm:px-6 lg:pt-6">
-            <div class="mb-4 rounded-xl border border-teal-500/20 bg-teal-500/5 px-4 py-3 text-sm text-(--muted)">
-                Platform portal only. Firm CRM data (leads, clients, appointments, calls) is never accessible here.
-            </div>
+        <main class="app-main mx-auto w-full max-w-7xl min-w-0 flex-1 px-4 py-6 pt-14 sm:px-6 lg:pt-6">
+            <!-- <div class="mb-4 rounded-xl border border-(--line) bg-(--surface) px-4 py-3 text-sm text-(--muted) shadow-sm">
+                <span class="font-semibold text-(--ink)">Platform portal.</span>
+                Firm CRM data (leads, clients, appointments, calls) stays inside each firm workspace.
+            </div> -->
 
             @if(session('success'))
                 <x-ui.alert class="mb-4">{{ session('success') }}</x-ui.alert>
@@ -101,5 +103,8 @@
 @include('superadmin.partials.edit-admin-modal', [
     'modalFirms' => $modalFirms,
 ])
+@include('superadmin.partials.delete-admin-modal')
+@include('superadmin.partials.delete-firm-modal')
+@stack('scripts')
 </body>
 </html>

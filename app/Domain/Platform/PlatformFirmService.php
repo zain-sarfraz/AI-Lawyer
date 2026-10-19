@@ -165,6 +165,26 @@ class PlatformFirmService
         return $admin->fresh(['roles', 'firm']);
     }
 
+    public function deleteAdmin(User $admin): void
+    {
+        if ($admin->firm_id === null || $admin->isSuperAdmin()) {
+            throw ValidationException::withMessages([
+                'admin' => 'Platform Superadmin accounts cannot be deleted here.',
+            ]);
+        }
+
+        if (! $admin->hasAnyRole(['Owner', 'Admin'])) {
+            throw ValidationException::withMessages([
+                'admin' => 'Only firm Owner/Admin users can be deleted here.',
+            ]);
+        }
+
+        DB::transaction(function () use ($admin): void {
+            $admin->syncRoles([]);
+            DB::table('users')->where('id', $admin->id)->delete();
+        });
+    }
+
     public function setFirmStatus(Firm $firm, string $status): Firm
     {
         if (! in_array($status, ['active', 'suspended'], true)) {
@@ -177,5 +197,24 @@ class PlatformFirmService
         $firm->save();
 
         return $firm->fresh();
+    }
+
+    /**
+     * Permanently remove a firm workspace and its cascaded tenant data.
+     */
+    public function deleteFirm(Firm $firm): void
+    {
+        DB::transaction(function () use ($firm): void {
+            $users = User::query()
+                ->withoutGlobalScopes()
+                ->where('firm_id', $firm->id)
+                ->get();
+
+            foreach ($users as $user) {
+                $user->syncRoles([]);
+            }
+
+            $firm->delete();
+        });
     }
 }

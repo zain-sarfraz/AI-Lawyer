@@ -20,9 +20,9 @@
     <div>
         <label class="ui-label">Status</label>
         <select name="status" class="ui-field" onchange="this.form.submit()">
-            <option value="all" @selected(($statusFilter ?? 'all') === 'all')>All statuses</option>
+            <option value="active" @selected(($statusFilter ?? 'active') === 'active')>Active only</option>
             @foreach(['pending', 'confirmed', 'completed', 'no_show', 'cancelled', 'rescheduled'] as $statusOption)
-                <option value="{{ $statusOption }}" @selected(($statusFilter ?? 'all') === $statusOption)>
+                <option value="{{ $statusOption }}" @selected(($statusFilter ?? 'active') === $statusOption)>
                     {{ str_replace('_', ' ', $statusOption) }}
                 </option>
             @endforeach
@@ -40,7 +40,9 @@
                 <tr>
                     <th>Name</th>
                     <th>Service</th>
-                    <th>Lawyer</th>
+                    @if($showLawyerColumn ?? true)
+                        <th>Lawyer</th>
+                    @endif
                     <th>Source</th>
                     <th>Date</th>
                     <th>Time</th>
@@ -56,8 +58,8 @@
                         ?: $appointment->lead?->phone
                         ?: '—';
                     $status = $appointment->status?->value ?? (string) $appointment->status;
-                    $canAct = auth()->user()?->can('appointments.manage')
-                        && in_array($status, ['pending', 'confirmed'], true);
+                    $canAct = ($canChangeAppointmentStatus ?? false)
+                        && in_array($status, ['pending', 'confirmed', 'completed', 'no_show'], true);
                     $sourceLabel = $appointment->source === 'phone_ai' ? 'AI booked' : ($appointment->source ?: 'staff');
                     $sourceTone = $appointment->source === 'phone_ai' ? 'teal' : 'info';
                     $statusClass = match ($status) {
@@ -69,11 +71,20 @@
                     };
                     $call = $relatedCalls->get($appointment->id);
                     $detail = \App\Http\Controllers\Admin\AppointmentController::detailPayload($appointment, $call);
+                    $statusOptions = [
+                        'pending' => 'Pending',
+                        'confirmed' => 'Confirmed',
+                        'completed' => 'Completed',
+                        'no_show' => 'No show',
+                        'cancelled' => 'Cancelled',
+                    ];
                 @endphp
                 <tr>
                     <td class="fw-semibold">{{ $name }}</td>
                     <td>{{ $appointment->service?->name ?: '—' }}</td>
-                    <td>{{ $appointment->lawyer?->displayName() ?: '—' }}</td>
+                    @if($showLawyerColumn ?? true)
+                        <td>{{ $appointment->lawyer?->displayName() ?: '—' }}</td>
+                    @endif
                     <td>
                         <x-legal.badge :tone="$sourceTone">{{ $sourceLabel }}</x-legal.badge>
                     </td>
@@ -134,14 +145,19 @@
                                     class="appt-actions-menu"
                                     :style="menuStyle"
                                 >
-                                    <form method="POST" action="{{ route('appointments.complete', $appointment) }}">
-                                        @csrf
-                                        <button type="submit" class="appt-action-item is-success">Mark complete</button>
-                                    </form>
-                                    <form method="POST" action="{{ route('appointments.cancel', $appointment) }}">
-                                        @csrf
-                                        <button type="submit" class="appt-action-item is-danger">Cancel</button>
-                                    </form>
+                                    @foreach($statusOptions as $value => $label)
+                                        @if($value !== $status)
+                                            <form method="POST" action="{{ route('appointments.status', $appointment) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <input type="hidden" name="status" value="{{ $value }}">
+                                                <button
+                                                    type="submit"
+                                                    class="appt-action-item {{ $value === 'cancelled' ? 'is-danger' : ($value === 'completed' ? 'is-success' : '') }}"
+                                                >{{ $label }}</button>
+                                            </form>
+                                        @endif
+                                    @endforeach
                                 </div>
                             @endif
                         </div>
@@ -195,7 +211,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="8" class="legal-empty py-5">
+                    <td colspan="{{ ($showLawyerColumn ?? true) ? 8 : 7 }}" class="legal-empty py-5">
                         <div class="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-teal-500/10 text-teal-600">
                             <x-ui.icon name="calendar-check" class="h-5 w-5" />
                         </div>

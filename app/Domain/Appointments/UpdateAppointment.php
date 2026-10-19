@@ -52,7 +52,7 @@ class UpdateAppointment
         }
 
         $startUtc = $this->clock->toUtc($payload['start_at']);
-        $endUtc = $startUtc->copy()->addMinutes((int) $service->duration_minutes);
+        $endUtc = $startUtc->copy()->addMinutes(AvailabilityService::SLOT_MINUTES);
         $status = $this->requestedStatus($payload['status'] ?? null, $appointment->status);
 
         try {

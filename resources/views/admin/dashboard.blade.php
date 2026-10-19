@@ -8,12 +8,12 @@
         ?? ($fineTuner['agents'][0] ?? null);
     $lineNumber = $lineAgent['phone_number'] ?? ($fineTuner['numbers'][0]['number'] ?? null);
     $leadTones = ['new' => 'info', 'contacted' => 'violet', 'qualified' => 'success', 'consultation_booked' => 'teal', 'follow_up' => 'warning', 'converted' => 'success', 'lost' => 'danger'];
-    $avatarTones = ['#ccfbf1', '#dbeafe', '#ede9fe', '#ffedd5', '#ffe4e6'];
+    $avatarTones = ['#128a82', '#3b6d9a', '#3d4f73', '#c4a35a', '#c23b4a'];
 @endphp
 
 <section class="dash-hero mb-4">
     <div>
-        <h1 class="font-display text-[clamp(1.75rem,3vw,2.35rem)] font-extrabold tracking-tight">{{ $greeting }} 👋</h1>
+        <h1 class="font-display text-[clamp(1.75rem,3vw,2.35rem)] font-bold tracking-tight">{{ $greeting }}</h1>
         <p class="mt-1 text-(--muted)">Calls, bookings, and the Synthflow line in one place.</p>
     </div>
     <div class="dash-hero-visual">

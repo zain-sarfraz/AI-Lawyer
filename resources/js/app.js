@@ -1,6 +1,25 @@
 import Alpine from 'alpinejs';
+import * as Turbo from '@hotwired/turbo';
 
 window.Alpine = Alpine;
+window.Turbo = Turbo;
+
+// Soft page navigations (no full browser refresh).
+Turbo.session.drive = true;
+
+document.addEventListener('turbo:before-cache', () => {
+    // Avoid restoring open Alpine dropdowns / modals from bfcache.
+    document.querySelectorAll('[x-cloak]').forEach((el) => {
+        el.removeAttribute('style');
+    });
+});
+
+document.addEventListener('turbo:before-render', () => {
+    if (window.__alpineStarted && typeof Alpine.destroyTree === 'function') {
+        Alpine.destroyTree(document.body);
+    }
+});
+
 
 Alpine.data('shell', () => ({
     mobileOpen: false,
@@ -82,7 +101,12 @@ Alpine.store('lawyerUi', {
 });
 
 Alpine.store('userUi', {
+    details: null,
     deleteTarget: null,
+    openDetails(user) {
+        this.details = user ? { ...user } : null;
+        window.dispatchEvent(new CustomEvent('open-modal', { detail: 'user-details' }));
+    },
     askDelete(target) {
         this.deleteTarget = target;
         window.dispatchEvent(new CustomEvent('open-modal', { detail: 'delete-user' }));
@@ -259,4 +283,245 @@ Alpine.store('serviceUi', {
     },
 });
 
-Alpine.start();
+Alpine.data('appointmentNotifier', (urls = {}) => ({
+    open: false,
+    items: [],
+    unreadCount: 0,
+    latestId: 0,
+    soundEnabled: localStorage.getItem('notification_sound_enabled') !== 'false',
+    hasNew: false,
+    toast: null,
+    toastTimer: null,
+    pollingInterval: null,
+    audioCtx: null,
+    feedUrl: urls.feedUrl || '/notifications/appointments/feed',
+    markReadUrl: urls.markReadUrl || '/notifications/appointments/mark-read',
+
+    init() {
+        this.fetchFeed(true);
+        this.pollingInterval = setInterval(() => this.poll(), 6000);
+
+        const unlockAudio = () => {
+            this.ensureAudioContext();
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('keydown', unlockAudio);
+            document.removeEventListener('touchstart', unlockAudio);
+        };
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
+        document.addEventListener('touchstart', unlockAudio, { once: true });
+
+        this.$el.addEventListener('turbo:before-cache', () => {
+            if (this.pollingInterval) {
+                clearInterval(this.pollingInterval);
+            }
+        });
+    },
+
+    destroy() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+        }
+        if (this.toastTimer) {
+            clearTimeout(this.toastTimer);
+        }
+    },
+
+    async fetchFeed(initial = false) {
+        try {
+            const res = await fetch(this.feedUrl, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) {
+                return;
+            }
+            const data = await res.json();
+            if (!data.success) {
+                return;
+            }
+
+            this.items = data.items || [];
+            this.unreadCount = data.unread_count || 0;
+            this.latestId = data.latest_id || 0;
+
+            if (!initial && this.unreadCount > 0) {
+                this.hasNew = true;
+            }
+        } catch (err) {
+            console.warn('Notification feed check failed:', err);
+        }
+    },
+
+    async poll() {
+        try {
+            const url = `${this.feedUrl}?last_id=${this.latestId}`;
+            const res = await fetch(url, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) {
+                return;
+            }
+            const data = await res.json();
+            if (!data.success) {
+                return;
+            }
+
+            if (data.has_brand_new && data.brand_new_item) {
+                this.hasNew = true;
+                this.unreadCount = data.unread_count;
+                this.latestId = data.latest_id;
+                this.items = data.items || [];
+
+                if (this.soundEnabled) {
+                    this.playBellSound();
+                }
+                this.showToast(data.brand_new_item);
+            } else if (data.latest_id !== this.latestId) {
+                this.latestId = data.latest_id;
+                this.items = data.items || [];
+                this.unreadCount = data.unread_count;
+            }
+        } catch (err) {
+            // Silently ignore intermittent poll errors
+        }
+    },
+
+    showToast(item) {
+        this.toast = item;
+        if (this.toastTimer) {
+            clearTimeout(this.toastTimer);
+        }
+        this.toastTimer = setTimeout(() => {
+            this.toast = null;
+        }, 8000);
+    },
+
+    async openDropdown() {
+        this.open = !this.open;
+        if (this.open) {
+            await this.fetchFeed();
+            // Opening the panel counts as "seen".
+            if (this.unreadCount > 0 || this.hasNew) {
+                await this.markAllRead();
+            }
+        }
+    },
+
+    async markAllRead() {
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const res = await fetch(this.markReadUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token || '',
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ latest_id: this.latestId }),
+            });
+
+            if (!res.ok) {
+                console.warn('Mark read failed with status', res.status);
+                return;
+            }
+
+            this.unreadCount = 0;
+            this.hasNew = false;
+            this.items.forEach((i) => {
+                i.is_unread = false;
+            });
+        } catch (e) {
+            console.warn('Mark read failed:', e);
+        }
+    },
+
+    toggleSound() {
+        this.soundEnabled = !this.soundEnabled;
+        localStorage.setItem('notification_sound_enabled', this.soundEnabled ? 'true' : 'false');
+        if (this.soundEnabled) {
+            this.playBellSound();
+        }
+    },
+
+    testSound() {
+        this.playBellSound();
+    },
+
+    ensureAudioContext() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) {
+                return null;
+            }
+            if (!this.audioCtx || this.audioCtx.state === 'closed') {
+                this.audioCtx = new AudioCtx();
+            }
+            if (this.audioCtx.state === 'suspended') {
+                this.audioCtx.resume();
+            }
+
+            return this.audioCtx;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    playBellSound() {
+        try {
+            const ctx = this.ensureAudioContext();
+            if (!ctx) {
+                return;
+            }
+
+            const now = ctx.currentTime;
+            const master = ctx.createGain();
+            master.gain.setValueAtTime(0.55, now);
+            master.connect(ctx.destination);
+
+            const ring = (freq, startAt, duration, peak) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, now + startAt);
+                gain.gain.setValueAtTime(0.0001, now + startAt);
+                gain.gain.exponentialRampToValueAtTime(peak, now + startAt + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + startAt + duration);
+                osc.connect(gain);
+                gain.connect(master);
+                osc.start(now + startAt);
+                osc.stop(now + startAt + duration + 0.02);
+            };
+
+            // Clear two-tone chime that browsers reliably play after user gesture unlock.
+            ring(1046.5, 0, 0.28, 0.7);
+            ring(1567.98, 0.16, 0.42, 0.75);
+        } catch (err) {
+            console.warn('Could not play notification chime:', err);
+        }
+    },
+}));
+
+document.addEventListener('turbo:load', () => {
+    if (!window.__alpineStarted) {
+        Alpine.start();
+        window.__alpineStarted = true;
+        return;
+    }
+
+    // Re-bind Alpine after Turbo swaps the body (no full page reload).
+    if (typeof Alpine.initTree === 'function') {
+        Alpine.initTree(document.body);
+    }
+});
+
+// Keep CSRF token fresh for Turbo form posts after soft navigations.
+document.addEventListener('turbo:before-fetch-request', (event) => {
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (token) {
+        event.detail.fetchOptions.headers['X-CSRF-TOKEN'] = token;
+    }
+});

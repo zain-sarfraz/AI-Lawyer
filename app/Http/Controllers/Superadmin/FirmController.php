@@ -91,4 +91,14 @@ class FirmController extends Controller
 
         return back()->with('success', 'Firm status updated to '.$data['status'].'.');
     }
+
+    public function destroy(Firm $firm): RedirectResponse
+    {
+        $name = $firm->firm_name;
+        $this->platform->deleteFirm($firm);
+
+        return redirect()
+            ->route('superadmin.firms.index')
+            ->with('success', $name.' deleted.');
+    }
 }

@@ -23,14 +23,21 @@ class SettingsController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:firm.settings.manage', only: ['edit', 'update']),
+            // edit() redirects lawyers to Profile instead of hard 403
+            new Middleware('permission:firm.settings.manage', only: ['update']),
             new Middleware('permission:integrations.manage', only: ['updateIntegration']),
             new Middleware('permission:audit.view', only: ['audit']),
         ];
     }
 
-    public function edit(): View
+    public function edit(): View|RedirectResponse
     {
+        if (! auth()->user()?->can('firm.settings.manage')) {
+            return redirect()
+                ->route('profile.edit')
+                ->with('success', 'Account settings are on your Profile page. Firm settings are managed by Admin.');
+        }
+
         $this->authorize('view', $this->firm->current());
 
         return view('settings.edit', [

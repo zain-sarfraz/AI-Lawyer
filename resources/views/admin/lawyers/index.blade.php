@@ -98,6 +98,10 @@
                 </div>
 
                 <div class="lawyer-card-actions">
+                    <a href="{{ route('schedule.availability', ['lawyer_id' => $lawyer->id]) }}" class="lawyer-action is-details">
+                        <x-ui.icon name="clock" class="h-3.5 w-3.5" />
+                        Availability
+                    </a>
                     <button type="button" class="lawyer-action is-details" @click="$store.lawyerUi.openDetails(@js($card))">
                         <x-ui.icon name="eye" class="h-3.5 w-3.5" />
                         Details

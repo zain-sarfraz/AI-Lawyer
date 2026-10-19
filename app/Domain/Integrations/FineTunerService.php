@@ -7,6 +7,8 @@ namespace App\Domain\Integrations;
 use App\Domain\AI\AiReceptionistService;
 use App\Domain\Firm\FirmService;
 use App\Models\Integration;
+use App\Models\Lawyer;
+use App\Models\Service;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -321,19 +323,11 @@ class FineTunerService
             'prompt' => $this->receptionist->systemPrompt(withCatalog: true),
             'greeting_message' => $this->receptionist->greetingMessage(),
             'greeting_message_mode' => 'agent_static',
-            'language' => $this->mapLanguage((string) ($firm->ai_language ?: 'en')),
             'timezone' => $firm->resolvedTimezone(),
             'voice_id' => filled($firm->ai_voice) ? (string) $firm->ai_voice : null,
             'llm' => (string) config('services.synthflow.llm', 'gpt-4.1-mini'),
             'is_transcript_disabled' => false,
-            // Conversational flow tuning: allow natural pauses, eliminate mid-sentence interruptions
-            'patience_level' => 'high',
-            'min_words_to_interrupt' => 3,
-            'initial_pause_seconds' => 1,
-            'transcriber_endpointing' => 300,
-            'reminder_after_idle_time_seconds' => 8,
-            'response_delay' => 1000,
-            'llm_response_delay' => 600,
+            ...$this->agentListeningConfig($firm),
         ], fn ($value) => $value !== null && $value !== '');
 
         $payload = [
@@ -552,18 +546,10 @@ class FineTunerService
             'prompt' => $this->receptionist->systemPrompt(withCatalog: true),
             'greeting_message' => $this->receptionist->greetingMessage(),
             'greeting_message_mode' => 'agent_static',
-            'language' => $this->mapLanguage((string) ($firm->ai_language ?: 'en')),
             'timezone' => $firm->resolvedTimezone(),
             'voice_id' => filled($firm->ai_voice) ? (string) $firm->ai_voice : null,
             'is_transcript_disabled' => false,
-            // Conversational flow tuning: allow natural pauses, eliminate mid-sentence interruptions
-            'patience_level' => 'high',
-            'min_words_to_interrupt' => 3,
-            'initial_pause_seconds' => 1,
-            'transcriber_endpointing' => 300,
-            'reminder_after_idle_time_seconds' => 8,
-            'response_delay' => 1000,
-            'llm_response_delay' => 600,
+            ...$this->agentListeningConfig($firm),
         ], fn ($value) => $value !== null && $value !== '');
 
         $payload = [
@@ -624,7 +610,7 @@ class FineTunerService
         $definitions = [
             [
                 'name' => 'get_services',
-                'description' => 'List firm legal services and the lawyers who handle each service. Announce ONLY the service names and which lawyer handles each service. Do not mention prices at this initial stage.',
+                'description' => 'List firm legal services by name. Read the "speak" or "menu" field aloud. Do NOT use option numbers. Ask which service they want. Map the spoken service name to services[].id. Do not mention prices yet.',
                 'speech' => 'Let me pull up our legal services and lawyers for you.',
                 'body' => ['firm_id' => $firmId, 'provider_call_id' => '<call_id>'],
                 'variables' => [['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123']],
@@ -645,8 +631,8 @@ class FineTunerService
             ],
             [
                 'name' => 'get_lawyers',
-                'description' => 'List lawyers for a service so you can tell the caller who will handle their matter.',
-                'speech' => 'Let me see which lawyer handles that.',
+                'description' => 'List lawyers for a service with their weekly availability hours (days and times). Use this to tell the caller when that lawyer is usually available.',
+                'speech' => 'Let me see which lawyer handles that and when they are available.',
                 'body' => [
                     'firm_id' => $firmId,
                     'provider_call_id' => '<call_id>',
@@ -658,10 +644,25 @@ class FineTunerService
                 ],
             ],
             [
+                'name' => 'list_available_days',
+                'description' => 'List available days this week by weekday name. Read "speak"/"menu". Ask which day. Do NOT use option numbers. Never invent days.',
+                'speech' => 'Let me check which days this lawyer has open this week.',
+                'body' => [
+                    'firm_id' => $firmId,
+                    'provider_call_id' => '<call_id>',
+                    'service_id' => '<service_id>',
+                    'lawyer_id' => '<lawyer_id>',
+                ],
+                'variables' => [
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
+                    ['name' => 'service_id', 'type' => 'string', 'description' => 'Service id', 'example' => '1'],
+                    ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Lawyer id from get_lawyers', 'example' => '2'],
+                ],
+            ],
+            [
                 'name' => 'find_available_slots',
-                'description' => 'Check real-time appointment slots for a specific service, lawyer, and date. ALWAYS pass the numeric service_id obtained from get_services or get_service_details. Pass the numeric lawyer_id from get_lawyers. Call this BEFORE booking — never invent times.',
-                'speech' => 'Let me check real-time availability for that date.',
-
+                'description' => 'Get availability for one date. Read "speak"/"menu" — tell ONLY the start and end time window (available_from to available_until). Let the caller choose any time in that window. Do NOT list every 30-minute slot or use option numbers. Then map their chosen time to slots[].start_at for booking. Pass service_id, lawyer_id, date YYYY-MM-DD.',
+                'speech' => 'Let me check when they are available that day.',
                 'body' => [
                     'firm_id' => $firmId,
                     'provider_call_id' => '<call_id>',
@@ -672,13 +673,13 @@ class FineTunerService
                 'variables' => [
                     ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
                     ['name' => 'service_id', 'type' => 'string', 'description' => 'Service id', 'example' => '1'],
-                    ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Lawyer id if known', 'example' => '2'],
-                    ['name' => 'date', 'type' => 'string', 'description' => 'Preferred date YYYY-MM-DD', 'example' => '2026-10-10'],
+                    ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Lawyer id', 'example' => '2'],
+                    ['name' => 'date', 'type' => 'string', 'description' => 'Date YYYY-MM-DD from list_available_days', 'example' => '2026-10-10'],
                 ],
             ],
             [
                 'name' => 'book_legal_consultation',
-                'description' => 'Book and confirm a legal consultation for the caller after agreeing date and time. Requires service_id, lawyer_id, start_at, name, phone. The appointment is immediately confirmed — NEVER ask for any 6-digit code or SMS verification code.',
+                'description' => 'Book and confirm ONE legal consultation after the caller chooses a day and a time inside the availability window. Map their time to slots[].start_at from find_available_slots. Call AT MOST ONCE per phone call. If already booked successfully, do NOT call again. Requires service_id, lawyer_id, start_at, name, phone. Never ask for a verification code.',
                 'speech' => 'I am booking that consultation for you now.',
 
                 'body' => [
@@ -692,6 +693,7 @@ class FineTunerService
                     'source' => 'phone_ai',
                 ],
                 'variables' => [
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
                     ['name' => 'service_id', 'type' => 'string', 'description' => 'Numeric service id from get_services or get_service_details', 'example' => '17'],
                     ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Numeric lawyer id from get_lawyers', 'example' => '17'],
                     ['name' => 'start_at', 'type' => 'string', 'description' => 'ISO start time from find_available_slots', 'example' => '2026-10-16T21:00:00+00:00'],
@@ -776,7 +778,12 @@ class FineTunerService
                 'run_action_before_call_start' => false,
                 'name' => $definition['name'],
                 'description' => $definition['description'],
+                // Short fill line only — do not use Synthflow's default
+                // "This is taking a little longer than usual, thanks for holding."
                 'speech_while_using_the_tool' => $definition['speech'],
+                'message_delay' => '',
+                'message_delay_time' => 60,
+                'action_sound' => '',
                 'headers' => $headers,
                 'variables_during_the_call' => $definition['variables'],
                 'json_body_stringified' => json_encode($definition['body'], JSON_UNESCAPED_SLASHES),
@@ -921,14 +928,75 @@ class FineTunerService
         return ['ok' => true];
     }
 
+    /**
+     * Listening / STT settings so the agent actually catches caller speech
+     * (names, phone digits, Urdu/English mix) instead of cutting them off.
+     *
+     * @return array<string, mixed>
+     */
+    private function agentListeningConfig(\App\Models\Firm $firm): array
+    {
+        $language = $this->mapLanguage((string) ($firm->ai_language ?: 'en'));
+        $serviceNames = Service::query()->active()->orderBy('name')->limit(40)->pluck('name');
+        $lawyerNames = Lawyer::query()->active()->with('user')->orderBy('id')->limit(40)->get()
+            ->map(fn (Lawyer $lawyer) => $lawyer->displayName());
+
+        $keywords = collect([
+            'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+            'thirty', 'half past', 'quarter',
+            'book', 'appointment', 'consultation', 'civil', 'civil cases', 'employment',
+            'employment cases', 'family', 'family cases', 'cases', 'monday', 'tuesday',
+            'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'morning', 'afternoon',
+            'evening', 'o\'clock', 'AM', 'PM',
+        ])
+            ->merge($serviceNames)
+            ->merge($lawyerNames)
+            ->merge($serviceNames->flatMap(function (string $name) {
+                // Help STT catch individual words from service titles.
+                return preg_split('/\s+/', strtolower($name)) ?: [];
+            }))
+            ->filter(fn ($word) => is_string($word) && trim($word) !== '')
+            ->map(fn (string $word) => trim($word))
+            ->unique()
+            ->values()
+            ->take(80)
+            ->all();
+
+        return [
+            'language' => $language,
+            // Wait for natural pauses — callers dictate names / phone slowly.
+            'patience_level' => 'high',
+            'min_words_to_interrupt' => 3,
+            'initial_pause_seconds' => 1,
+            'transcriber_endpointing' => 1200,
+            'transcriber_speech_recognition' => 'high_accuracy',
+            // Phone calls in PK often mix English/Urdu — Synthflow STT catches speech better than en-only models.
+            'transcriber_provider' => 'synthflow-stt',
+            // Extreme voice-isolation chops caller audio; standard catches speech better.
+            'noise_cancellation' => 'standard',
+            'suppression_level' => 0.35,
+            'send_user_idle_reminders' => true,
+            'reminder_after_idle_time_seconds' => 12,
+            'response_delay' => 900,
+            'llm_response_delay' => 500,
+            'transcriber_keywords' => $keywords !== [] ? $keywords : null,
+        ];
+    }
+
     private function mapLanguage(string $language): string
     {
         $language = strtolower(trim($language));
 
         return match ($language) {
             'en', 'en-us', 'english' => 'en-US',
-            'ur', 'urdu' => 'en-US',
-            default => strlen($language) >= 2 ? $language : 'en-US',
+            // Synthflow has no dedicated Urdu code — use multilingual for Urdu / mix.
+            'ur', 'urdu', 'en-ur', 'en_ur', 'english+urdu', 'english + urdu', 'multi' => 'multi',
+            'hi', 'hindi' => 'hi',
+            default => in_array($language, [
+                'multi', 'en-US', 'bg', 'cs', 'de-DE', 'el', 'fi', 'fr-FR', 'es-ES', 'hu', 'it', 'fr',
+                'pt-BR', 'nl-NL', 'hi', 'zh-CN', 'no', 'sv-SE', 'da', 'da-DK', 'id', 'ja', 'ko', 'ms',
+                'ro', 'ru', 'sk', 'tr', 'uk', 'vi', 'th', 'pl',
+            ], true) ? $language : 'en-US',
         };
     }
 

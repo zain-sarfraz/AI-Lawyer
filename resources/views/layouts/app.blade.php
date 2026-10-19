@@ -7,7 +7,7 @@
     <title>{{ config('app.name', 'AI Lawyer') }} — @yield('title', 'Workspace')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
     </script>
@@ -36,15 +36,13 @@
     $nav = [
         ['group' => 'Workspace', 'items' => [
             ['route' => 'dashboard', 'match' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'grid', 'permission' => null],
-            ['route' => 'schedule.index', 'match' => 'schedule.*', 'label' => 'Calendar', 'icon' => 'calendar', 'permission' => 'schedules.manage|appointments.view'],
+            ['route' => 'schedule.index', 'match' => 'schedule.index', 'label' => 'Calendar', 'icon' => 'calendar', 'permission' => 'schedules.manage|appointments.view'],
+            ['route' => 'schedule.availability', 'match' => 'schedule.availability*', 'label' => 'Availability', 'icon' => 'clock', 'permission' => 'schedules.manage'],
             ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check', 'permission' => 'appointments.view'],
         ]],
         ['group' => 'Firm', 'items' => [
-            ['route' => 'leads.index', 'match' => 'leads.*', 'label' => 'Leads', 'icon' => 'user-plus', 'permission' => 'leads.view'],
             ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users', 'permission' => 'clients.view'],
             ['route' => 'cases.index', 'match' => 'cases.*', 'label' => 'Cases Management', 'icon' => 'scales', 'permission' => 'cases.view'],
-            ['route' => 'crm.documents.index', 'match' => 'crm.*', 'label' => 'CRM', 'icon' => 'book', 'permission' => 'documents.view'],
-            ['route' => 'users.index', 'match' => 'users.*', 'label' => 'Users', 'icon' => 'users', 'permission' => 'users.manage'],
             ['route' => 'lawyers.index', 'match' => 'lawyers.*', 'label' => 'Lawyers', 'icon' => 'briefcase', 'permission' => 'lawyers.manage'],
             ['route' => 'services.index', 'match' => 'services.*', 'label' => 'Services', 'icon' => 'journal', 'permission' => 'services.manage'],
             ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart', 'permission' => 'reports.view'],
@@ -56,7 +54,7 @@
     $nav = collect($nav)->map(function (array $section) use ($allows, $isRestrictedLawyer) {
         $section['items'] = collect($section['items'])
             ->filter(function (array $item) use ($allows, $isRestrictedLawyer) {
-                if ($isRestrictedLawyer && in_array($item['route'], ['leads.index', 'clients.index', 'users.index', 'lawyers.index', 'services.index', 'ai.show', 'settings.edit'], true)) {
+                if ($isRestrictedLawyer && in_array($item['route'], ['clients.index', 'lawyers.index', 'services.index', 'ai.show', 'settings.edit'], true)) {
                     return false;
                 }
 
@@ -79,10 +77,10 @@
         :class="[collapsed ? 'w-[4.75rem]' : 'w-64', mobileOpen ? 'translate-x-0' : '-translate-x-full max-lg:invisible lg:visible lg:translate-x-0']"
     >
         <div class="relative flex items-center gap-3 px-4 py-5">
-            <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-teal-500 text-sm font-extrabold text-navy-950 shadow-[0_0_0_4px_rgba(20,184,166,0.18)]">AL</div>
+            <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-sm font-extrabold text-white shadow-[0_0_0_3px_rgba(18,138,130,0.28)]">AL</div>
             <div x-show="!collapsed" x-cloak class="min-w-0 flex-1">
-                <div class="text-lg font-extrabold leading-none tracking-tight text-white">AI Lawyer</div>
-
+                <div class="font-display text-lg font-semibold leading-none tracking-tight text-white">AI Lawyer</div>
+                <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-gold-400">Legal workspace</div>
             </div>
             <button
                 type="button"
@@ -131,7 +129,9 @@
                 </button>
                 <div x-show="open" x-cloak class="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-2xl border border-white/10 bg-navy-800 p-2 shadow-xl" :class="collapsed ? 'left-full top-auto bottom-0 mb-0 ml-2' : ''">
                     <a class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/5" href="{{ route('profile.edit') }}">Profile</a>
-                    <a class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/5" href="{{ route('settings.edit') }}">Settings</a>
+                    @can('firm.settings.manage')
+                        <a class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/5" href="{{ route('settings.edit') }}">Settings</a>
+                    @endcan
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button class="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/5" type="submit">Log out</button>

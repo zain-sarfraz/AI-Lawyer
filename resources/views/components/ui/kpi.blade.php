@@ -12,6 +12,7 @@
         'violet' => 'is-violet',
         'amber' => 'is-amber',
         'rose' => 'is-rose',
+        'teal' => 'is-teal',
         default => 'is-mint',
     };
 @endphp

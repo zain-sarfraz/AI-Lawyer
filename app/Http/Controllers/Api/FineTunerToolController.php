@@ -63,28 +63,56 @@ class FineTunerToolController extends Controller
 
         return app(FirmContext::class)->run($firmId, function () use ($tool, $arguments, $providerCallId, $firmId) {
             $session = null;
+            $call = null;
+
             if ($providerCallId !== '') {
                 $call = Call::query()->withoutGlobalScope(FirmScope::class)
                     ->where('provider_call_id', $providerCallId)
                     ->first();
+            }
 
-                if (! $call && $firmId) {
-                    $call = Call::query()->create([
-                        'firm_id' => $firmId,
-                        'provider_call_id' => $providerCallId,
-                        'direction' => 'inbound',
-                        'caller_phone' => $arguments['phone'] ?? null,
-                        'status' => 'in_progress',
-                        'started_at' => now(),
-                    ]);
+            // Reuse an in-progress call for this phone when FineTuner sends a new/missing call id.
+            if (! $call && $firmId) {
+                $phone = $arguments['phone'] ?? null;
+                if (is_array($phone)) {
+                    $phone = $phone['value'] ?? $phone['number'] ?? $phone['phone'] ?? reset($phone) ?: null;
                 }
-
-                if ($call && ! empty($arguments['phone']) && empty($call->caller_phone)) {
-                    $call->update(['caller_phone' => $arguments['phone']]);
+                $digits = preg_replace('/\D+/', '', (string) ($phone ?? '')) ?: '';
+                if ($digits !== '' && strlen($digits) >= 7) {
+                    $call = Call::query()->withoutGlobalScope(FirmScope::class)
+                        ->where('firm_id', $firmId)
+                        ->where('status', 'in_progress')
+                        ->where('started_at', '>=', now()->subHours(3))
+                        ->where('caller_phone', 'like', '%'.$digits.'%')
+                        ->latest('id')
+                        ->first();
                 }
+            }
 
-                $session = $call?->aiSession;
-                if (! $session && $call) {
+            if (! $call && $firmId && $providerCallId !== '') {
+                $call = Call::query()->create([
+                    'firm_id' => $firmId,
+                    'provider_call_id' => $providerCallId,
+                    'direction' => 'inbound',
+                    'caller_phone' => is_string($arguments['phone'] ?? null) ? $arguments['phone'] : null,
+                    'status' => 'in_progress',
+                    'started_at' => now(),
+                ]);
+            }
+
+            if ($call && ! empty($arguments['phone'])) {
+                $phone = $arguments['phone'];
+                if (is_array($phone)) {
+                    $phone = $phone['value'] ?? $phone['number'] ?? $phone['phone'] ?? reset($phone) ?: null;
+                }
+                if (is_string($phone) && $phone !== '' && empty($call->caller_phone)) {
+                    $call->update(['caller_phone' => $phone]);
+                }
+            }
+
+            if ($call) {
+                $session = $call->aiSession;
+                if (! $session) {
                     $session = AiSession::query()->where('call_id', $call->id)->first();
                     if (! $session) {
                         $session = AiSession::query()->create([
@@ -96,16 +124,18 @@ class FineTunerToolController extends Controller
                     }
                 }
 
-                // Ensure book_appointment always receives the live call id.
-                if ($call && empty($arguments['call_id'])) {
+                if (empty($arguments['call_id'])) {
                     $arguments['call_id'] = $call->id;
                 }
                 if ($providerCallId !== '' && empty($arguments['provider_call_id'])) {
                     $arguments['provider_call_id'] = $providerCallId;
+                } elseif (empty($arguments['provider_call_id']) && $call->provider_call_id) {
+                    $arguments['provider_call_id'] = $call->provider_call_id;
                 }
-                if ($tool === 'book_appointment') {
-                    $arguments['source'] = 'phone_ai';
-                }
+            }
+
+            if ($tool === 'book_appointment') {
+                $arguments['source'] = 'phone_ai';
             }
 
             $result = $this->tools->invoke($tool, $arguments, $session);

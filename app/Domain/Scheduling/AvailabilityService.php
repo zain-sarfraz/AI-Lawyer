@@ -16,12 +16,16 @@ use App\Models\Lawyer;
 use App\Models\ScheduleBlock;
 use App\Models\ScheduleBreak;
 use App\Models\Service;
+use App\Models\WorkingHour;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 class AvailabilityService
 {
+    /** Fixed appointment slot length (minutes). */
+    public const SLOT_MINUTES = 30;
+
     public function __construct(
         private readonly FirmService $firmService,
         private readonly FirmTime $clock,
@@ -52,7 +56,7 @@ class AvailabilityService
                 $lawyer,
                 $day,
                 $firm,
-                (int) $type->duration_minutes,
+                self::SLOT_MINUTES,
                 (int) $firm->buffer_before_minutes,
                 (int) $firm->buffer_minutes,
                 [
@@ -91,7 +95,7 @@ class AvailabilityService
                 $candidate,
                 $localDate,
                 $firm,
-                (int) $service->duration_minutes,
+                self::SLOT_MINUTES,
                 (int) $firm->buffer_before_minutes,
                 $bufferAfter,
                 [
@@ -106,6 +110,69 @@ class AvailabilityService
         return $slots;
     }
 
+    /**
+     * Days in the running week (today → Sunday) that still have free 30-minute slots.
+     *
+     * @return list<array{date: string, weekday: string, label: string, slot_count: int}>
+     */
+    public function listAvailableDaysInWeek(
+        Service $service,
+        ?Lawyer $lawyer = null,
+    ): array {
+        $firm = $this->firmService->current();
+        $now = $this->clock->now($firm)->startOfDay();
+        $weekEnd = $now->copy()->endOfWeek(Carbon::SUNDAY)->startOfDay();
+
+        $days = [];
+        for ($day = $now->copy(); $day->lte($weekEnd); $day->addDay()) {
+            $slots = $this->findSlots($service, $day, $lawyer);
+            if ($slots === []) {
+                continue;
+            }
+
+            $days[] = [
+                'date' => $day->toDateString(),
+                'weekday' => $day->format('l'),
+                'label' => $day->format('l, M j'),
+                'slot_count' => count($slots),
+            ];
+        }
+
+        return $days;
+    }
+
+    /**
+     * Weekly working-hour windows the lawyer configured (for agent speech / UI).
+     *
+     * @return list<array{day_of_week: int, weekday: string, start: string, end: string, start_label: string, end_label: string}>
+     */
+    public function weeklyHoursSummary(Lawyer $lawyer): array
+    {
+        $dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        return WorkingHour::query()
+            ->where('lawyer_id', $lawyer->id)
+            ->where('status', 'active')
+            ->orderBy('day_of_week')
+            ->orderBy('start_time')
+            ->get()
+            ->map(function (WorkingHour $hour) use ($dayNames) {
+                $start = substr((string) $hour->start_time, 0, 5);
+                $end = substr((string) $hour->end_time, 0, 5);
+
+                return [
+                    'day_of_week' => (int) $hour->day_of_week,
+                    'weekday' => $dayNames[(int) $hour->day_of_week] ?? 'Day',
+                    'start' => $start,
+                    'end' => $end,
+                    'start_label' => Carbon::createFromFormat('H:i', $start)->format('g:i A'),
+                    'end_label' => Carbon::createFromFormat('H:i', $end)->format('g:i A'),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     public function isSlotAvailable(
         Service|AppointmentType $bookable,
         Lawyer $lawyer,
@@ -118,7 +185,7 @@ class AvailabilityService
             $startAt instanceof CarbonInterface ? $startAt->toIso8601String() : $startAt,
             $firm,
         );
-        $duration = (int) $bookable->duration_minutes;
+        $duration = self::SLOT_MINUTES;
         $bufferBefore = (int) $firm->buffer_before_minutes;
         $bufferAfter = $bookable instanceof Service
             ? (int) ($bookable->buffer_minutes ?? $firm->buffer_minutes)
@@ -191,7 +258,9 @@ class AvailabilityService
             return [];
         }
 
-        $interval = max(5, (int) $firm->slot_interval_minutes);
+        // Fixed 30-minute slots (start every 30 minutes, each lasts 30 minutes).
+        $interval = self::SLOT_MINUTES;
+        $duration = self::SLOT_MINUTES;
         $earliest = $this->clock->now($firm)->addMinutes((int) $firm->min_notice_minutes);
         $blocking = $this->blockingAppointments($lawyer->id, $day, $bufferBefore, $bufferAfter);
 
@@ -236,6 +305,36 @@ class AvailabilityService
     /**
      * @return list<array{0: Carbon, 1: Carbon}>
      */
+    private function workingHourWindows(Lawyer $lawyer, Carbon $day, int $dayOfWeek, string $timezone): array
+    {
+        $hours = WorkingHour::query()
+            ->where('day_of_week', $dayOfWeek)
+            ->where('status', 'active')
+            ->where(function ($q) use ($lawyer) {
+                $q->where('lawyer_id', $lawyer->id)->orWhereNull('lawyer_id');
+            })
+            ->orderBy('start_time')
+            ->get();
+
+        $lawyerHours = $hours->where('lawyer_id', $lawyer->id);
+        $source = $lawyerHours->isNotEmpty()
+            ? $lawyerHours
+            : $hours->whereNull('lawyer_id');
+
+        $windows = [];
+        foreach ($source as $hour) {
+            $windows[] = [
+                $this->atLocalTime($day, (string) $hour->start_time, $timezone),
+                $this->atLocalTime($day, (string) $hour->end_time, $timezone),
+            ];
+        }
+
+        return $windows;
+    }
+
+    /**
+     * @return list<array{0: Carbon, 1: Carbon}>
+     */
     private function availableWindowsForDate(Lawyer $lawyer, string $date, Firm $firm, string $timezone): array
     {
         $day = Carbon::parse($date, $timezone);
@@ -254,12 +353,9 @@ class AvailabilityService
 
         $dayOfWeek = (int) $day->dayOfWeek;
 
-        // Lawyers are available the whole day for booking. The exact slot is decided on the call.
-        // Holidays, breaks, blocks, and existing appointment overlaps are still applied below.
-        $windows = [[
-            $this->atLocalTime($day, '00:00:00', $timezone),
-            $this->atLocalTime($day, '23:59:00', $timezone),
-        ]];
+        // Windows come from the lawyer's weekly availability (working_hours).
+        // No hours for that day ⇒ not bookable. Date-specific Available exceptions can add windows.
+        $windows = $this->workingHourWindows($lawyer, $day, $dayOfWeek, $timezone);
 
         foreach ($exceptions->where('type', AvailabilityExceptionType::Available) as $exception) {
             if ($exception->start_time && $exception->end_time) {
@@ -268,6 +364,10 @@ class AvailabilityService
                     $this->atLocalTime($day, (string) $exception->end_time, $timezone),
                 ];
             }
+        }
+
+        if ($windows === []) {
+            return [];
         }
 
         $breaks = ScheduleBreak::query()

@@ -28,7 +28,7 @@
             </div>
             <div class="col-12 col-md-4">
                 <label class="ui-label">Timezone</label>
-                <input class="ui-field" name="timezone" value="{{ old('timezone', 'America/New_York') }}">
+                <input class="ui-field" name="timezone" value="{{ old('timezone', 'Asia/Karachi') }}">
             </div>
             <div class="col-12 col-md-4">
                 <label class="ui-label">Currency</label>

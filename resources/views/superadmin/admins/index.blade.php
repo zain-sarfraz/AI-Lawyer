@@ -6,7 +6,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4 gap-2 flex-wrap">
     <div>
         <h1 class="font-display text-2xl font-extrabold tracking-tight">Admins</h1>
-        <p class="mt-1 text-(--muted)">Add or edit firm admins. Each admin only sees their own firm dashboard.</p>
+        <p class="mt-1 text-(--muted)">Add, edit, or remove firm admins. Each admin only sees their own firm dashboard.</p>
     </div>
     <button type="button" class="ui-btn ui-btn-brass" @click="$dispatch('open-modal', 'add-admin')">Add admin</button>
 </div>
@@ -41,25 +41,42 @@
                         </td>
                         <td class="py-3 pr-3">{{ $admin->getRoleNames()->join(', ') ?: '—' }}</td>
                         <td class="py-3 text-end">
-                            <button
-                                type="button"
-                                class="table-icon-btn is-edit"
-                                title="Edit admin"
-                                aria-label="Edit admin"
-                                @click="
-                                    $dispatch('fill-edit-admin', {
-                                        action: @js(route('superadmin.admins.update', $admin->id)),
-                                        firm_id: @js($admin->firm_id),
-                                        admin_name: @js($admin->name),
-                                        admin_email: @js($admin->email),
-                                        admin_role: @js($role),
-                                        status: @js($status),
-                                    });
-                                    $dispatch('open-modal', 'edit-admin');
-                                "
-                            >
-                                <x-ui.icon name="pencil" class="h-4 w-4" />
-                            </button>
+                            <div class="inline-flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    class="table-icon-btn is-edit"
+                                    title="Edit admin"
+                                    aria-label="Edit admin"
+                                    @click="
+                                        $dispatch('fill-edit-admin', {
+                                            action: @js(route('superadmin.admins.update', $admin->id)),
+                                            firm_id: @js($admin->firm_id),
+                                            admin_name: @js($admin->name),
+                                            admin_email: @js($admin->email),
+                                            admin_role: @js($role),
+                                            status: @js($status),
+                                        });
+                                        $dispatch('open-modal', 'edit-admin');
+                                    "
+                                >
+                                    <x-ui.icon name="pencil" class="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    class="table-icon-btn is-delete"
+                                    title="Delete admin"
+                                    aria-label="Delete admin"
+                                    @click="
+                                        $dispatch('fill-delete-admin', {
+                                            action: @js(route('superadmin.admins.destroy', $admin->id)),
+                                            name: @js($admin->name),
+                                        });
+                                        $dispatch('open-modal', 'delete-admin');
+                                    "
+                                >
+                                    <x-ui.icon name="trash" class="h-4 w-4" />
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 @empty

@@ -42,11 +42,13 @@ Route::middleware(['auth', 'verified', 'active', 'superadmin'])->prefix('superad
     Route::get('firms/{firm}', [SuperadminFirmController::class, 'show'])->name('firms.show');
     Route::put('firms/{firm}', [SuperadminFirmController::class, 'update'])->name('firms.update');
     Route::patch('firms/{firm}/status', [SuperadminFirmController::class, 'updateStatus'])->name('firms.status');
+    Route::delete('firms/{firm}', [SuperadminFirmController::class, 'destroy'])->name('firms.destroy');
 
     Route::get('admins', [SuperadminAdminController::class, 'index'])->name('admins.index');
     Route::get('admins/create', [SuperadminAdminController::class, 'create'])->name('admins.create');
     Route::post('admins', [SuperadminAdminController::class, 'store'])->name('admins.store');
     Route::put('admins/{admin}', [SuperadminAdminController::class, 'update'])->name('admins.update');
+    Route::delete('admins/{admin}', [SuperadminAdminController::class, 'destroy'])->name('admins.destroy');
 
     Route::get('settings', [SuperadminSettingsController::class, 'edit'])->name('settings.edit');
     Route::put('settings', [SuperadminSettingsController::class, 'update'])->name('settings.update');
@@ -70,9 +72,11 @@ Route::middleware(['auth', 'verified', 'active', 'firm'])->group(function () {
     Route::patch('crm/documents/{crm_document}', [CrmDocumentController::class, 'update'])->name('crm.documents.update');
     Route::delete('crm/documents/{crm_document}', [CrmDocumentController::class, 'destroy'])->name('crm.documents.destroy');
     Route::patch('cases/{legal_case}/notes', [LegalCaseController::class, 'updateNotes'])->name('cases.notes');
+    Route::post('cases/{legal_case}/attachments', [LegalCaseController::class, 'storeAttachments'])->name('cases.attachments');
     Route::resource('appointments', AppointmentController::class)->only(['index', 'create', 'store', 'update', 'destroy']);
     Route::post('appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])->name('appointments.cancel');
     Route::post('appointments/{appointment}/complete', [AppointmentController::class, 'complete'])->name('appointments.complete');
+    Route::patch('appointments/{appointment}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.status');
     Route::patch('appointments/{appointment}/notes', [AppointmentController::class, 'updateNotes'])->name('appointments.notes');
     Route::get('appointments-availability', [AppointmentController::class, 'availability'])->name('appointments.availability');
     Route::get('notifications/appointments/feed', [NotificationController::class, 'appointmentsFeed'])->name('notifications.appointments.feed');
@@ -89,6 +93,8 @@ Route::middleware(['auth', 'verified', 'active', 'firm'])->group(function () {
     Route::get('calls/{call}', [CallController::class, 'show'])->name('calls.show');
 
     Route::get('schedule', [ScheduleController::class, 'index'])->name('schedule.index');
+    Route::get('schedule/availability', [ScheduleController::class, 'availability'])->name('schedule.availability');
+    Route::post('schedule/availability', [ScheduleController::class, 'syncAvailability'])->name('schedule.availability.sync');
     Route::post('schedule/working-hours', [ScheduleController::class, 'storeWorkingHour'])->name('schedule.working-hours.store');
     Route::post('schedule/holidays', [ScheduleController::class, 'storeHoliday'])->name('schedule.holidays.store');
 

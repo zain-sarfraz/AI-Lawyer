@@ -16,7 +16,7 @@ class AiToolDefinitions
                 'type' => 'object',
                 'properties' => (object) [],
             ]),
-            self::tool('get_services', 'List active AI-visible legal services and prices.', [
+            self::tool('get_services', 'List active legal services by name. Read speak/menu aloud. Do not use option numbers.', [
                 'type' => 'object',
                 'properties' => [
                     'category' => ['type' => 'string', 'description' => 'Optional category filter'],
@@ -29,20 +29,28 @@ class AiToolDefinitions
                 ],
                 'required' => ['service_id'],
             ]),
-            self::tool('get_lawyers', 'List eligible active lawyers, optionally filtered by service.', [
+            self::tool('get_lawyers', 'List eligible active lawyers with their weekly availability windows, optionally filtered by service.', [
                 'type' => 'object',
                 'properties' => [
                     'service_id' => ['type' => 'integer'],
                 ],
             ]),
-            self::tool('find_available_slots', 'Find verified appointment slots. Always use before booking.', [
+            self::tool('list_available_days', 'List available days this week by name. Read speak/menu. Ask which day. No option numbers.', [
                 'type' => 'object',
                 'properties' => [
                     'service_id' => ['type' => 'integer'],
                     'lawyer_id' => ['type' => 'integer'],
-                    'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
                 ],
-                'required' => ['service_id', 'date'],
+                'required' => ['service_id', 'lawyer_id'],
+            ]),
+            self::tool('find_available_slots', 'Return availability window (start–end) for one date. Read speak/menu only — tell start and end times, let caller pick a time. Do not list every slot or use option numbers.', [
+                'type' => 'object',
+                'properties' => [
+                    'service_id' => ['type' => 'integer'],
+                    'lawyer_id' => ['type' => 'integer'],
+                    'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD from list_available_days'],
+                ],
+                'required' => ['service_id', 'lawyer_id', 'date'],
             ]),
             self::tool('find_caller', 'Find existing lead/client by phone number.', [
                 'type' => 'object',
@@ -61,7 +69,7 @@ class AiToolDefinitions
                     'notes' => ['type' => 'string'],
                 ],
             ]),
-            self::tool('book_appointment', 'Book an appointment only after availability was checked. Never claim success unless this returns success.', [
+            self::tool('book_appointment', 'Book ONE appointment after the caller confirms the final slot. Call at most once per conversation. Never claim success unless this returns success.', [
                 'type' => 'object',
                 'properties' => [
                     'service_id' => ['type' => 'integer'],

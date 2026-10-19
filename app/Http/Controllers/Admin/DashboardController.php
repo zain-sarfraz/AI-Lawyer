@@ -88,11 +88,28 @@ class DashboardController extends Controller
         $documents = CrmDocument::query()->with(['client'])->latest('id')->limit(6)->get();
         $cases = LegalCase::query()->with(['client', 'lawyer.user'])->latest('id')->limit(6)->get();
 
+        $nextAppointment = $upcoming->first();
+
+        $startOfWeek = now()->startOfWeek();
+        $todayDate = now()->toDateString();
+        $weekDays = collect(range(0, 6))->map(function ($dayOffset) use ($startOfWeek, $todayDate) {
+            $d = (clone $startOfWeek)->addDays($dayOffset);
+
+            return [
+                'name' => $d->format('D'),
+                'number' => $d->format('j'),
+                'date' => $d->toDateString(),
+                'is_today' => $d->toDateString() === $todayDate,
+            ];
+        });
+
         return view('admin.dashboard-user', [
             'greeting' => "{$partOfDay}, {$user->name}.",
             'firmShort' => $firmShort,
             'roleLabel' => $user->getRoleNames()->first() ?: 'Team',
             'upcomingAppointments' => $upcoming,
+            'nextAppointment' => $nextAppointment,
+            'weekDays' => $weekDays,
             'todayCount' => $todayCount,
             'clients' => $clients,
             'documents' => $documents,

@@ -5,7 +5,7 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-4 gap-2 flex-wrap">
     <div>
-        <h1 class="font-display text-2xl font-extrabold tracking-tight">Firm</h1>
+        <h1 class="font-display text-2xl font-bold tracking-tight">Firm</h1>
         <p class="mt-1 text-(--muted)">Each firm is an isolated admin workspace.</p>
     </div>
     <button type="button" class="ui-btn ui-btn-brass" @click="$dispatch('open-modal', 'create-firm')">Create firm</button>
@@ -24,13 +24,18 @@
             </thead>
             <tbody>
                 @foreach($firms as $firm)
+                    @php $isActive = ($firm->status ?? 'active') === 'active'; @endphp
                     <tr class="border-b border-(--line)/60">
                         <td class="py-3 pr-3">
                             <div class="font-semibold">{{ $firm->firm_name }}</div>
                             <div class="text-xs text-(--muted)">{{ $firm->email }}</div>
                         </td>
                         <td class="py-3 pr-3">{{ $firm->users_count }}</td>
-                        <td class="py-3 pr-3"><span class="voice-pill">{{ $firm->status ?? 'active' }}</span></td>
+                        <td class="py-3 pr-3">
+                            <span class="status-pill {{ $isActive ? 'is-active' : 'is-suspended' }}">
+                                {{ $isActive ? 'Active' : 'Suspended' }}
+                            </span>
+                        </td>
                         <td class="py-3 text-end">
                             <div class="inline-flex items-center gap-1">
                                 <button
@@ -53,7 +58,22 @@
                                 >
                                     <x-ui.icon name="pencil" class="h-4 w-4" />
                                 </button>
-                                <a href="{{ route('superadmin.firms.show', $firm) }}" class="ui-btn ui-btn-ghost btn-sm">Open</a>
+                                <button
+                                    type="button"
+                                    class="table-icon-btn is-delete"
+                                    title="Delete firm"
+                                    aria-label="Delete firm"
+                                    @click="
+                                        $dispatch('fill-delete-firm', {
+                                            action: @js(route('superadmin.firms.destroy', $firm)),
+                                            name: @js($firm->firm_name),
+                                        });
+                                        $dispatch('open-modal', 'delete-firm');
+                                    "
+                                >
+                                    <x-ui.icon name="trash" class="h-4 w-4" />
+                                </button>
+                                <a href="{{ route('superadmin.firms.show', $firm) }}" class="ui-btn ui-btn-primary btn-sm">Open</a>
                             </div>
                         </td>
                     </tr>

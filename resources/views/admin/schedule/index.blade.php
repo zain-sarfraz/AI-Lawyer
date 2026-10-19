@@ -192,7 +192,7 @@ function appointmentCalendar(boot) {
             if (this.view === 'week') {
                 const start = this.startOfWeek(this.cursor);
                 const end = new Date(start);
-                end.setDate(end.getDate() + 4);
+                end.setDate(end.getDate() + 6);
                 return start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                     + ' – '
                     + end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -228,7 +228,8 @@ function appointmentCalendar(boot) {
         get weekDays() {
             const start = this.startOfWeek(this.cursor);
             const today = this.iso(new Date());
-            return Array.from({ length: 5 }, (_, i) => {
+            // Full week Mon–Sun (weekends included — not off).
+            return Array.from({ length: 7 }, (_, i) => {
                 const d = new Date(start);
                 d.setDate(start.getDate() + i);
                 const key = this.iso(d);

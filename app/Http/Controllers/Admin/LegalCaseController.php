@@ -23,7 +23,7 @@ class LegalCaseController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('permission:cases.view', only: ['index', 'show']),
-            new Middleware('permission:cases.manage', only: ['create', 'store', 'edit', 'update', 'updateNotes', 'destroy']),
+            new Middleware('permission:cases.manage', only: ['create', 'store', 'edit', 'update', 'updateNotes', 'storeAttachments', 'destroy']),
         ];
     }
 
@@ -85,8 +85,8 @@ class LegalCaseController extends Controller implements HasMiddleware
 
         $case = DB::transaction(function () use ($data, $images, $files, $request) {
             $case = LegalCase::query()->create($data);
-            $this->storeAttachments($case, $images, 'image');
-            $this->storeAttachments($case, $files, 'file');
+            $this->persistCaseAttachments($case, $images, 'image');
+            $this->persistCaseAttachments($case, $files, 'file');
 
             return $case;
         });
@@ -120,9 +120,61 @@ class LegalCaseController extends Controller implements HasMiddleware
             $data['lawyer_id'] = $restrictedLawyerId;
         }
 
-        $legal_case->update($data);
+        $images = $this->uploadedList($request, 'images');
+        $files = $this->uploadedList($request, 'files');
 
-        return redirect()->route('cases.index')->with('success', 'Case updated.');
+        if ($error = $this->attachmentLimitError($legal_case, $images, $files)) {
+            return back()->withInput($request->except(['images', 'files']))->withErrors($error);
+        }
+
+        DB::transaction(function () use ($legal_case, $data, $images, $files) {
+            $legal_case->update($data);
+            $this->persistCaseAttachments($legal_case, $images, 'image');
+            $this->persistCaseAttachments($legal_case, $files, 'file');
+        });
+
+        $added = count($images) + count($files);
+
+        return redirect()->route('cases.index')->with('success', $added > 0
+            ? "Case updated with {$added} attachment(s)."
+            : 'Case updated.');
+    }
+
+    public function storeAttachments(Request $request, LegalCase $legal_case): RedirectResponse
+    {
+        $this->authorize('update', $legal_case);
+
+        $request->validate([
+            'images' => ['nullable', 'array', 'max:2'],
+            'images.*' => ['image', 'max:10240'],
+            'files' => ['nullable', 'array', 'max:3'],
+            'files.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,txt,xls,xlsx,csv,zip,rtf'],
+        ], [
+            'images.max' => 'Maximum 2 images allowed per upload.',
+            'files.max' => 'Maximum 3 files allowed per upload.',
+            'images.*.image' => 'Only image files are allowed in Images.',
+            'files.*.mimes' => 'Files must be PDF, Word, Excel, text, or ZIP.',
+        ]);
+
+        $images = $this->uploadedList($request, 'images');
+        $files = $this->uploadedList($request, 'files');
+
+        if ($images === [] && $files === []) {
+            return back()->withErrors(['files' => 'Please choose at least one image or file to upload.']);
+        }
+
+        if ($error = $this->attachmentLimitError($legal_case, $images, $files)) {
+            return back()->withErrors($error);
+        }
+
+        $this->persistCaseAttachments($legal_case, $images, 'image');
+        $this->persistCaseAttachments($legal_case, $files, 'file');
+
+        $added = count($images) + count($files);
+
+        return redirect()->route('cases.index')->with('success', $added === 1
+            ? 'Attachment uploaded.'
+            : "{$added} attachments uploaded.");
     }
 
     public function updateNotes(Request $request, LegalCase $legal_case): RedirectResponse
@@ -190,9 +242,34 @@ class LegalCaseController extends Controller implements HasMiddleware
     }
 
     /**
+     * @param  list<UploadedFile>  $images
+     * @param  list<UploadedFile>  $files
+     * @return array<string, string>|null
+     */
+    private function attachmentLimitError(LegalCase $case, array $images, array $files): ?array
+    {
+        $existingImages = $case->documents()
+            ->where(function ($q) {
+                $q->where('notes', 'image')
+                    ->orWhere('mime_type', 'like', 'image/%');
+            })
+            ->count();
+        $existingFiles = max(0, $case->documents()->count() - $existingImages);
+
+        if ($existingImages + count($images) > 2) {
+            return ['images' => 'This case already has '.$existingImages.' image(s). Maximum 2 images total.'];
+        }
+        if ($existingFiles + count($files) > 3) {
+            return ['files' => 'This case already has '.$existingFiles.' file(s). Maximum 3 files total.'];
+        }
+
+        return null;
+    }
+
+    /**
      * @param  list<UploadedFile>  $uploads
      */
-    private function storeAttachments(LegalCase $case, array $uploads, string $kind): void
+    private function persistCaseAttachments(LegalCase $case, array $uploads, string $kind): void
     {
         if ($uploads === []) {
             return;
@@ -209,6 +286,7 @@ class LegalCaseController extends Controller implements HasMiddleware
             }
 
             CrmDocument::query()->create([
+                'firm_id' => $firmId ?: null,
                 'client_id' => $case->client_id,
                 'legal_case_id' => $case->id,
                 'uploaded_by' => auth()->id(),

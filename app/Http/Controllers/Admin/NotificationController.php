@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class NotificationController extends Controller
 {
@@ -17,7 +18,7 @@ class NotificationController extends Controller
      */
     public function appointmentsFeed(Request $request): JsonResponse
     {
-        $lastReadId = (int) session('appointment_notifications_last_read', 0);
+        $lastReadId = $this->lastReadId();
         $clientLastId = (int) $request->query('last_id', 0);
 
         // Uses global scopes: FirmScope (only this firm) and RestrictsToAssignedLawyer (only this lawyer if role is Lawyer)
@@ -61,6 +62,7 @@ class NotificationController extends Controller
         return response()->json([
             'success' => true,
             'latest_id' => $latestId,
+            'last_read_id' => $lastReadId,
             'unread_count' => $unreadCount,
             'has_brand_new' => $hasBrandNew,
             'brand_new_item' => $hasBrandNew ? $items->first() : null,
@@ -74,13 +76,47 @@ class NotificationController extends Controller
     public function markAppointmentsRead(Request $request): JsonResponse
     {
         $latestId = (int) $request->input('latest_id', 0);
+        if ($latestId <= 0) {
+            $latestId = (int) Appointment::query()->max('id');
+        }
+
         if ($latestId > 0) {
-            session(['appointment_notifications_last_read' => $latestId]);
+            $this->persistLastReadId($latestId);
         }
 
         return response()->json([
             'success' => true,
             'last_read_id' => $latestId,
+            'unread_count' => 0,
         ]);
+    }
+
+    private function lastReadId(): int
+    {
+        $userId = (int) (auth()->id() ?? 0);
+        $fromSession = (int) session('appointment_notifications_last_read', 0);
+        $fromCache = $userId > 0
+            ? (int) Cache::get($this->cacheKey($userId), 0)
+            : 0;
+
+        return max($fromSession, $fromCache);
+    }
+
+    private function persistLastReadId(int $latestId): void
+    {
+        $userId = (int) (auth()->id() ?? 0);
+        $current = $this->lastReadId();
+        $value = max($current, $latestId);
+
+        session(['appointment_notifications_last_read' => $value]);
+
+        if ($userId > 0) {
+            Cache::forever($this->cacheKey($userId), $value);
+        }
+    }
+
+    private function cacheKey(int $userId): string
+    {
+        return 'appointment_notifications_last_read_'.$userId;
     }
 }

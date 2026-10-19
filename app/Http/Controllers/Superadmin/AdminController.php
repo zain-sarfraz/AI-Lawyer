@@ -78,4 +78,19 @@ class AdminController extends Controller
             ->route('superadmin.admins.index')
             ->with('success', 'Admin updated.');
     }
+
+    public function destroy(int $admin): RedirectResponse
+    {
+        $user = User::query()
+            ->withoutGlobalScopes()
+            ->with('roles')
+            ->findOrFail($admin);
+
+        $name = $user->name;
+        $this->platform->deleteAdmin($user);
+
+        return redirect()
+            ->route('superadmin.admins.index')
+            ->with('success', $name.' removed from firm admins.');
+    }
 }

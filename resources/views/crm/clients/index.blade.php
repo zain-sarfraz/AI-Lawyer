@@ -49,7 +49,7 @@
 ></div>
 
 <div x-data="liveTableSearch(@js($filters['q'] ?? ''))">
-    <x-legal.page-header title="Clients" subtitle="AI Lawyer client records — name, number, services, and appointments">
+    <x-legal.page-header title="Clients" subtitle="Customers who reached you by call — name, phone, services, and appointments">
         <x-slot:actions>
             @can('clients.manage')
                 <button type="button" class="ui-btn ui-btn-primary" @click="$dispatch('open-modal', 'create-client')">New client</button>

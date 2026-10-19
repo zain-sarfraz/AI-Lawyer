@@ -7,7 +7,7 @@
     <title>{{ config('app.name', 'AI Lawyer') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
     </script>
@@ -20,13 +20,13 @@
             <div class="absolute bottom-10 left-10 h-40 w-40 rounded-full bg-teal-400/10 blur-2xl"></div>
             <div>
                 <div class="flex items-center gap-3">
-                    <div class="grid h-11 w-11 place-items-center rounded-full bg-teal-500 text-sm font-extrabold text-navy-950">AL</div>
+                    <div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-sm font-extrabold text-white shadow-[0_0_0_3px_rgba(18,138,130,0.28)]">AL</div>
                     <div>
-                        <div class="text-xl font-extrabold tracking-tight text-white">AI Lawyer</div>
-                        <div class="text-xs font-semibold uppercase tracking-[0.18em] text-teal-400">Voice operations</div>
+                        <div class="font-display text-xl font-semibold tracking-tight text-white">AI Lawyer</div>
+                        <div class="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">Voice operations</div>
                     </div>
                 </div>
-                <h1 class="mt-16 max-w-md text-5xl font-extrabold leading-[1.05] tracking-tight text-white">The front desk that never puts a caller on hold.</h1>
+                <h1 class="font-display mt-16 max-w-md text-5xl font-semibold leading-[1.05] tracking-tight text-white">The front desk that never puts a caller on hold.</h1>
                 <p class="mt-5 max-w-md text-slate-300">Answer, qualify, and book from verified availability. The model never invents a slot.</p>
             </div>
             <ol class="space-y-4 text-sm text-slate-300">

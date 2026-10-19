@@ -64,11 +64,25 @@ class LeadService
             return null;
         }
 
-        $normalized = preg_replace('/\D+/', '', $phone);
+        $digits = preg_replace('/\D+/', '', $phone) ?: '';
+        if ($digits === '') {
+            return Lead::query()->where('phone', $phone)->latest()->first();
+        }
+
+        $tail = strlen($digits) >= 9 ? substr($digits, -9) : $digits;
 
         return Lead::query()
-            ->where('phone', $phone)
-            ->orWhere('phone', 'like', '%'.$normalized)
+            ->where(function ($q) use ($phone, $digits, $tail) {
+                $q->where('phone', $phone)
+                    ->orWhereRaw(
+                        "REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'+',''),'(','') LIKE ?",
+                        ['%'.$digits.'%']
+                    )
+                    ->orWhereRaw(
+                        "REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'+',''),'(','') LIKE ?",
+                        ['%'.$tail.'%']
+                    );
+            })
             ->latest()
             ->first();
     }
@@ -85,11 +99,20 @@ class LeadService
             $data['email'] = (string) ($data['email']['value'] ?? reset($data['email']) ?? '');
         }
 
+        // Store phones as digits so spaced variants still match later.
+        if (! empty($data['phone'])) {
+            $digits = preg_replace('/\D+/', '', (string) $data['phone']) ?: '';
+            if ($digits !== '') {
+                $data['phone'] = $digits;
+            }
+        }
+
         return DB::transaction(function () use ($data) {
             $existing = $this->findByPhone($data['phone'] ?? null);
             if ($existing) {
                 return $this->update($existing, array_filter([
                     'name' => $data['name'] ?? $existing->name,
+                    'phone' => $data['phone'] ?? $existing->phone,
                     'email' => $data['email'] ?? $existing->email,
                     'service_id' => $data['service_id'] ?? $existing->service_id,
                     'lawyer_id' => $data['lawyer_id'] ?? $existing->lawyer_id,

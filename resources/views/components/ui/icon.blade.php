@@ -7,6 +7,7 @@
         'phone' => '<path d="M6 4h3l1.5 3-2 1.5a12 12 0 0 0 6 6L16 13l3 1.5v3A2 2 0 0 1 17 19 14 14 0 0 1 5 6a2 2 0 0 1 1-2z"/>',
         'calendar-check' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M9 16l2 2 4-4"/>',
         'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'user-plus' => '<circle cx="9" cy="8" r="3"/><path d="M3 19a6 6 0 0 1 12 0M19 8v6M16 11h6"/>',
         'users' => '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2"/><path d="M3 19a6 6 0 0 1 12 0M15 19a4 4 0 0 1 6-1"/>',
         'briefcase' => '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>',

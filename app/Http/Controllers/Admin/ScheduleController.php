@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Firm\FirmContext;
+use App\Domain\Scheduling\AvailabilityService;
+use App\Domain\Scheduling\LawyerAvailabilityService;
 use App\Enums\AppointmentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
@@ -19,10 +21,19 @@ use Illuminate\View\View;
 
 class ScheduleController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly LawyerAvailabilityService $availabilityEditor,
+    ) {}
+
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:schedules.manage', only: ['storeWorkingHour', 'storeHoliday']),
+            new Middleware('permission:schedules.manage', only: [
+                'storeWorkingHour',
+                'storeHoliday',
+                'availability',
+                'syncAvailability',
+            ]),
         ];
     }
 
@@ -102,6 +113,64 @@ class ScheduleController extends Controller implements HasMiddleware
         WorkingHour::query()->create($data + ['status' => 'active']);
 
         return back()->with('success', 'Working hours saved.');
+    }
+
+    public function availability(Request $request): View
+    {
+        $this->authorize('create', WorkingHour::class);
+
+        $restrictedLawyerId = app(FirmContext::class)->restrictedLawyerId();
+        $lawyers = Lawyer::query()->with('user')->active()->orderBy('id')->get();
+
+        $selectedId = $restrictedLawyerId
+            ?? (int) ($request->integer('lawyer_id') ?: ($lawyers->first()?->id ?? 0));
+
+        if ($restrictedLawyerId !== null) {
+            $selectedId = $restrictedLawyerId;
+        }
+
+        $lawyer = $lawyers->firstWhere('id', $selectedId) ?: $lawyers->first();
+        abort_unless($lawyer, 404, 'No lawyer profile found.');
+
+        return view('admin.schedule.availability', [
+            'lawyers' => $lawyers,
+            'lawyer' => $lawyer,
+            'week' => $this->availabilityEditor->weekFormState($lawyer),
+            'slotMinutes' => AvailabilityService::SLOT_MINUTES,
+            'restricted' => $restrictedLawyerId !== null,
+        ]);
+    }
+
+    public function syncAvailability(Request $request): RedirectResponse
+    {
+        $this->authorize('create', WorkingHour::class);
+
+        $data = $request->validate([
+            'lawyer_id' => ['required', 'exists:lawyers,id'],
+            'days' => ['required', 'array'],
+            'days.*.day_of_week' => ['required', 'integer', 'between:0,6'],
+            'days.*.enabled' => ['nullable', 'boolean'],
+            'days.*.start_time' => ['nullable', 'date_format:H:i'],
+            'days.*.end_time' => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $restrictedLawyerId = app(FirmContext::class)->restrictedLawyerId();
+        if ($restrictedLawyerId !== null) {
+            $data['lawyer_id'] = $restrictedLawyerId;
+        }
+
+        $lawyer = Lawyer::query()->findOrFail($data['lawyer_id']);
+        $days = collect($data['days'])->map(function (array $day) {
+            $day['enabled'] = filter_var($day['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            return $day;
+        })->all();
+
+        $this->availabilityEditor->syncWeekly($lawyer, $days);
+
+        return redirect()
+            ->route('schedule.availability', ['lawyer_id' => $lawyer->id])
+            ->with('success', 'Availability saved. Callers will only see these days and 30-minute slots.');
     }
 
     public function storeHoliday(Request $request): RedirectResponse

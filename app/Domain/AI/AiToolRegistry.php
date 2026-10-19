@@ -41,6 +41,7 @@ class AiToolRegistry
             'get_services',
             'get_service_details',
             'get_lawyers',
+            'list_available_days',
             'find_available_slots',
             'find_caller',
             'create_or_update_lead',
@@ -64,6 +65,7 @@ class AiToolRegistry
                 'get_services' => $this->getServices($arguments),
                 'get_service_details' => $this->getServiceDetails($arguments),
                 'get_lawyers' => $this->getLawyers($arguments),
+                'list_available_days' => $this->listAvailableDays($arguments),
                 'find_available_slots' => $this->findAvailableSlots($arguments),
                 'find_caller' => $this->findCaller($arguments),
                 'create_or_update_lead' => $this->createOrUpdateLead($arguments),
@@ -123,7 +125,8 @@ class AiToolRegistry
             $query->whereHas('category', fn ($q) => $q->where('name', 'like', '%'.$args['category'].'%'));
         }
 
-        return $query->with('lawyers.user')->get()->map(function (Service $s) {
+        $services = $query->with('lawyers.user')->get();
+        $rows = $services->values()->map(function (Service $s) {
             $lawyers = $s->lawyers->map(fn (Lawyer $l) => [
                 'id' => $l->id,
                 'name' => $l->displayName(),
@@ -133,7 +136,6 @@ class AiToolRegistry
             $lawyerNames = $lawyers === []
                 ? 'to be assigned'
                 : implode(', ', array_map(fn (array $l) => $l['name'], $lawyers));
-
             return [
                 'id' => $s->id,
                 'name' => $s->name,
@@ -144,13 +146,22 @@ class AiToolRegistry
                 'fee_label' => $feeLabel,
                 'duration_minutes' => $s->duration_minutes,
                 'lawyers' => $lawyers,
-                'speak' => sprintf(
-                    '%s (handled by %s).',
-                    $s->name,
-                    $lawyerNames,
-                ),
+                'speak' => sprintf('%s with %s', $s->name, $lawyerNames),
             ];
         })->all();
+
+        $menu = $rows === []
+            ? 'No services are available right now.'
+            : ('We offer '
+                .$this->naturalJoin(array_map(fn (array $row) => $row['speak'], $rows))
+                .'. Which service would you like?');
+
+        return [
+            'menu' => $menu,
+            'speak' => $menu,
+            'count' => count($rows),
+            'services' => $rows,
+        ];
     }
 
     private function getServiceDetails(array $args): array
@@ -180,7 +191,7 @@ class AiToolRegistry
             'booking_enabled' => $service->booking_enabled,
             'lawyers' => $lawyers,
             'speak' => sprintf(
-                '%s costs %s for about %d minutes. Lawyer(s): %s.',
+                '%s costs %s for about %d minutes. Lawyer(s): %s. Next I need your full name and phone number, then I will tell you which days are open.',
                 $service->name,
                 trim(($service->currency ?: '').' '.number_format((float) $service->price, 2)),
                 (int) $service->duration_minutes,
@@ -188,6 +199,7 @@ class AiToolRegistry
                     ? 'to be assigned'
                     : implode(', ', array_map(fn (array $l) => $l['name'], $lawyers)),
             ),
+            'next_step' => 'Collect name and phone, then call list_available_days. Ask for a day name, not an option number.',
         ];
     }
 
@@ -200,12 +212,75 @@ class AiToolRegistry
             $query->whereHas('services', fn ($q) => $q->where('services.id', $serviceId));
         }
 
-        return $query->get()->map(fn (Lawyer $l) => [
-            'id' => $l->id,
-            'name' => $l->displayName(),
-            'title' => $l->title,
-            'specialties' => $l->specialties ?? [],
-        ])->all();
+        return $query->get()->map(function (Lawyer $l) {
+            $hours = $this->availability->weeklyHoursSummary($l);
+            $speakHours = $hours === []
+                ? 'no weekly availability set yet'
+                : implode('; ', array_map(
+                    fn (array $h) => $h['weekday'].' '.$h['start_label'].' to '.$h['end_label'],
+                    $hours,
+                ));
+
+            return [
+                'id' => $l->id,
+                'name' => $l->displayName(),
+                'title' => $l->title,
+                'specialties' => $l->specialties ?? [],
+                'weekly_hours' => $hours,
+                'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+                'speak' => $l->displayName().' is usually available: '.$speakHours.'. Appointments are '.AvailabilityService::SLOT_MINUTES.' minutes.',
+            ];
+        })->all();
+    }
+
+    private function listAvailableDays(array $args): array
+    {
+        $serviceId = isset($args['service_id']) ? (int) $args['service_id'] : null;
+        $lawyerId = isset($args['lawyer_id']) && $args['lawyer_id'] !== '' ? (int) $args['lawyer_id'] : null;
+
+        if (! $serviceId || ! $lawyerId) {
+            return [
+                'error' => 'MISSING_IDS',
+                'message' => 'service_id and lawyer_id are required. Call get_services / get_lawyers first.',
+            ];
+        }
+
+        $service = Service::query()->bookable()->find($serviceId);
+        if (! $service) {
+            return ['error' => 'NOT_FOUND', 'message' => 'Service not bookable.'];
+        }
+
+        $lawyer = Lawyer::query()->active()->find($lawyerId);
+        if (! $lawyer) {
+            return ['error' => 'NOT_FOUND', 'message' => 'Lawyer not found.'];
+        }
+
+        $days = $this->availability->listAvailableDaysInWeek($service, $lawyer);
+
+        if ($days === []) {
+            return [
+                'days' => [],
+                'lawyer_id' => $lawyer->id,
+                'lawyer_name' => $lawyer->displayName(),
+                'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+                'message' => $lawyer->displayName().' has no free slots left this week. Offer next week or another lawyer.',
+            ];
+        }
+
+        $dayNames = array_map(fn (array $d) => $d['weekday'], $days);
+        $speak = $lawyer->displayName().' is available this week on '
+            .$this->naturalJoin($dayNames)
+            .'. Which day would you like?';
+
+        return [
+            'days' => array_values($days),
+            'lawyer_id' => $lawyer->id,
+            'lawyer_name' => $lawyer->displayName(),
+            'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+            'count' => count($days),
+            'menu' => $speak,
+            'speak' => $speak,
+        ];
     }
 
     private function findAvailableSlots(array $args): array
@@ -234,16 +309,108 @@ class AiToolRegistry
             // Return a helpful message instead of empty array so agent can respond properly
             return [
                 'slots'   => [],
-                'message' => 'No slots available on ' . $date->toDateString() . '. Try a different date.',
+                'windows' => [],
+                'message' => 'No availability on '.$date->toDateString().'. Call list_available_days and offer another day.',
                 'date'    => $date->toDateString(),
+                'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+                'speak' => 'That day is fully booked. Which other day works for you?',
             ];
         }
 
+        $windows = $this->availabilityWindowsFromSlots($slots);
+        $windowSpeak = $this->naturalJoin(array_map(
+            fn (array $w) => $w['start_label'].' to '.$w['end_label'],
+            $windows,
+        ));
+
+        $speak = 'On '.$date->format('l, M j').', '
+            .($lawyer?->displayName() ?: 'the lawyer')
+            .' is available from '.$windowSpeak
+            .'. Consultations are '.AvailabilityService::SLOT_MINUTES
+            .' minutes. What time would you like?';
+
         return [
-            'slots'   => $slots,
-            'date'    => $date->toDateString(),
-            'count'   => count($slots),
+            // Keep slots for booking match; do not read them aloud.
+            'slots' => $slots,
+            'windows' => $windows,
+            'available_from' => $windows[0]['start_label'] ?? null,
+            'available_until' => $windows[array_key_last($windows)]['end_label'] ?? null,
+            'all_slot_count' => count($slots),
+            'date' => $date->toDateString(),
+            'count' => count($slots),
+            'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+            'menu' => $speak,
+            'speak' => $speak,
+            'next_step' => 'Ask the caller to choose any time within the availability window. Map their time to the nearest matching slots[].start_at, then book. Never list individual slot options aloud.',
         ];
+    }
+
+    /**
+     * @param  list<string>  $parts
+     */
+    private function naturalJoin(array $parts): string
+    {
+        $parts = array_values(array_filter($parts, fn ($p) => is_string($p) && $p !== ''));
+        $count = count($parts);
+        if ($count === 0) {
+            return '';
+        }
+        if ($count === 1) {
+            return $parts[0];
+        }
+        if ($count === 2) {
+            return $parts[0].' and '.$parts[1];
+        }
+
+        return implode(', ', array_slice($parts, 0, -1)).', and '.$parts[$count - 1];
+    }
+
+    /**
+     * Merge free slots into spoken availability windows (start → end), not every 30-min option.
+     *
+     * @param  list<array<string, mixed>>  $slots
+     * @return list<array{start_at: string, end_at: string, start_label: string, end_label: string}>
+     */
+    private function availabilityWindowsFromSlots(array $slots): array
+    {
+        if ($slots === []) {
+            return [];
+        }
+
+        $tz = (string) ($slots[0]['timezone'] ?? $this->firmService->current()->resolvedTimezone());
+        $windows = [];
+        $windowStart = $slots[0];
+        $prev = $slots[0];
+
+        for ($i = 1, $n = count($slots); $i < $n; $i++) {
+            $slot = $slots[$i];
+            $prevStartLocal = Carbon::parse((string) ($prev['start_local'] ?? $prev['start_at']), $tz);
+            $slotStartLocal = Carbon::parse((string) ($slot['start_local'] ?? $slot['start_at']), $tz);
+
+            // Contiguous 30-min starts stay in one window; a larger gap opens a new window.
+            if ($slotStartLocal->gt($prevStartLocal->copy()->addMinutes(AvailabilityService::SLOT_MINUTES))) {
+                $endLocal = $prevStartLocal->copy()->addMinutes(AvailabilityService::SLOT_MINUTES);
+                $windows[] = [
+                    'start_at' => (string) ($windowStart['start_at'] ?? ''),
+                    'end_at' => (string) ($prev['end_at'] ?? $endLocal->copy()->utc()->toIso8601String()),
+                    'start_label' => (string) ($windowStart['label'] ?? $windowStart['start_local'] ?? ''),
+                    'end_label' => $endLocal->format('g:i A'),
+                ];
+                $windowStart = $slot;
+            }
+            $prev = $slot;
+        }
+
+        $prevStartLocal = Carbon::parse((string) ($prev['start_local'] ?? $prev['start_at']), $tz);
+        $endLocal = $prevStartLocal->copy()->addMinutes(AvailabilityService::SLOT_MINUTES);
+        $windows[] = [
+            'start_at' => (string) ($windowStart['start_at'] ?? ''),
+            'end_at' => (string) ($prev['end_at'] ?? $endLocal->copy()->utc()->toIso8601String()),
+            'start_label' => (string) ($windowStart['label'] ?? ''),
+            'end_label' => $endLocal->format('g:i A'),
+        ];
+
+        return $windows;
     }
 
     private function findCaller(array $args): array
@@ -292,6 +459,15 @@ class AiToolRegistry
 
         // Voice agent bookings are always phone_ai (never staff).
         $args['source'] = 'phone_ai';
+
+        // Stable idempotency so FineTuner retries / second tool calls cannot create extra rows.
+        if (empty($args['idempotency_key'])) {
+            if (! empty($args['call_id'])) {
+                $args['idempotency_key'] = 'phone_ai:call:'.(int) $args['call_id'];
+            } elseif (! empty($args['provider_call_id'])) {
+                $args['idempotency_key'] = 'phone_ai:provider:'.trim((string) $args['provider_call_id']);
+            }
+        }
 
         // Normalize fields from Synthflow:
         // Synthflow may send phone as array/object: e.g. ["value" => "+92300..."]

@@ -31,8 +31,8 @@ class AppointmentController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:appointments.view', only: ['index', 'availability', 'updateNotes']),
-            new Middleware('permission:appointments.manage', only: ['create', 'store', 'update', 'cancel', 'complete', 'destroy']),
+            new Middleware('permission:appointments.view', only: ['index', 'availability', 'updateNotes', 'cancel', 'complete', 'updateStatus']),
+            new Middleware('permission:appointments.manage', only: ['create', 'store', 'update', 'destroy']),
         ];
     }
 
@@ -41,12 +41,22 @@ class AppointmentController extends Controller implements HasMiddleware
         $this->authorize('viewAny', Appointment::class);
 
         $statusFilter = $request->string('status')->toString();
+        // "all" used to dump cancelled history and look like duplicate bookings.
+        if ($statusFilter === '' || $statusFilter === 'all') {
+            $statusFilter = 'active';
+        }
 
         $appointments = Appointment::query()
             ->with(['lawyer.user', 'service', 'lead', 'client', 'call'])
             ->when($request->date, fn ($q) => $q->whereDate('start_at', $request->date))
+            ->when($statusFilter === 'active', function ($q) {
+                $q->whereNotIn('status', [
+                    \App\Enums\AppointmentStatus::Cancelled->value,
+                    \App\Enums\AppointmentStatus::Rescheduled->value,
+                ]);
+            })
             ->when(
-                $statusFilter !== '' && $statusFilter !== 'all',
+                $statusFilter !== '' && $statusFilter !== 'active',
                 fn ($q) => $q->where('status', $statusFilter)
             )
             ->latest('id')
@@ -58,12 +68,14 @@ class AppointmentController extends Controller implements HasMiddleware
         return view('appointments.index', [
             'appointments' => $appointments,
             'relatedCalls' => $relatedCalls,
-            'statusFilter' => $statusFilter !== '' ? $statusFilter : 'all',
+            'statusFilter' => $statusFilter,
             'formServices' => Service::query()->bookable()->orderBy('name')->get(),
             'formLawyers' => Lawyer::query()->active()->with('user')->get(),
             'formClients' => \App\Models\Client::query()->orderBy('name')->get(['id', 'name', 'client_number']),
             'canManageCases' => auth()->user()?->can('cases.manage') ?? false,
             'canManageAppointments' => auth()->user()?->can('appointments.manage') ?? false,
+            'canChangeAppointmentStatus' => auth()->user()?->can('appointments.view') ?? false,
+            'showLawyerColumn' => ! (auth()->user()?->hasRole('Lawyer') && ! auth()->user()?->hasAnyRole(['Owner', 'Admin'])),
         ]);
     }
 
@@ -264,7 +276,7 @@ class AppointmentController extends Controller implements HasMiddleware
 
     public function cancel(Appointment $appointment): RedirectResponse
     {
-        $this->authorize('update', $appointment);
+        $this->authorize('changeStatus', $appointment);
 
         $this->booking->cancel($appointment, 'Cancelled by staff');
 
@@ -273,11 +285,30 @@ class AppointmentController extends Controller implements HasMiddleware
 
     public function complete(Appointment $appointment): RedirectResponse
     {
-        $this->authorize('update', $appointment);
+        $this->authorize('changeStatus', $appointment);
 
         $this->statusChange->execute($appointment, AppointmentStatus::Completed);
 
         return back()->with('success', 'Appointment marked complete.');
+    }
+
+    public function updateStatus(Request $request, Appointment $appointment): RedirectResponse
+    {
+        $this->authorize('changeStatus', $appointment);
+
+        $data = $request->validate([
+            'status' => ['required', 'in:pending,confirmed,completed,no_show,cancelled'],
+        ]);
+
+        $status = AppointmentStatus::from($data['status']);
+
+        if ($status === AppointmentStatus::Cancelled) {
+            $this->booking->cancel($appointment, 'Cancelled by staff');
+        } else {
+            $this->statusChange->execute($appointment, $status);
+        }
+
+        return back()->with('success', 'Appointment status updated.');
     }
 
     public function updateNotes(Request $request, Appointment $appointment): RedirectResponse

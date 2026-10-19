@@ -87,14 +87,11 @@ class DemoDataSeeder extends Seeder
             );
             $lawyer->services()->sync([$service->id]);
 
-            for ($day = 1; $day <= 5; $day++) {
+            // Full week availability (0=Sunday … 6=Saturday)
+            for ($day = 0; $day <= 6; $day++) {
                 WorkingHour::query()->firstOrCreate(
-                    ['lawyer_id' => $lawyer->id, 'day_of_week' => $day, 'start_time' => '09:00:00'],
-                    ['end_time' => '17:00:00', 'status' => 'active']
-                );
-                ScheduleBreak::query()->firstOrCreate(
-                    ['lawyer_id' => $lawyer->id, 'day_of_week' => $day, 'start_time' => '12:00:00'],
-                    ['end_time' => '13:00:00']
+                    ['lawyer_id' => $lawyer->id, 'day_of_week' => $day, 'start_time' => '00:00:00'],
+                    ['end_time' => '23:59:00', 'status' => 'active']
                 );
             }
 

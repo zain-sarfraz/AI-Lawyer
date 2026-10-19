@@ -62,7 +62,12 @@
                     <span>Last synced</span>
                     <strong>
                         @if($lastSyncedAt)
-                            {{ \Illuminate\Support\Carbon::parse($lastSyncedAt)->timezone($firm->resolvedTimezone())->format('n/j/Y, g:i:s A') }}
+                            @php
+                                $syncTz = $firm->resolvedTimezone();
+                                $syncAt = \Illuminate\Support\Carbon::parse($lastSyncedAt)->timezone($syncTz);
+                            @endphp
+                            {{ $syncAt->format('d M Y, h:i:s A') }}
+                            <span class="text-(--muted) text-xs">({{ $syncTz }})</span>
                         @else
                             Never
                         @endif
@@ -360,7 +365,12 @@
                     <span>Last synced</span>
                     <strong>
                         @if($lastSyncedAt)
-                            {{ \Illuminate\Support\Carbon::parse($lastSyncedAt)->timezone($firm->resolvedTimezone())->format('n/j/Y, g:i:s A') }}
+                            @php
+                                $syncTz = $firm->resolvedTimezone();
+                                $syncAt = \Illuminate\Support\Carbon::parse($lastSyncedAt)->timezone($syncTz);
+                            @endphp
+                            {{ $syncAt->format('d M Y, h:i:s A') }}
+                            <span class="text-(--muted) text-xs">({{ $syncTz }})</span>
                         @else
                             —
                         @endif
