@@ -84,4 +84,18 @@ return [
         'base_url' => env('SYNTHFLOW_API_BASE', env('FINETUNER_API_BASE', 'https://api.synthflow.ai/v2')),
     ],
 
+    /*
+    | CourtListener legal research API (United States case law only).
+    | https://www.courtlistener.com/help/api/
+    | The token is used server-side only and is never sent to the browser.
+    */
+    'courtlistener' => [
+        'api_token' => env('COURTLISTENER_API_TOKEN'),
+        'base_url' => env('COURTLISTENER_BASE_URL', 'https://www.courtlistener.com/api/rest/v4'),
+        'cache_ttl' => (int) env('COURTLISTENER_CACHE_TTL', 3600),
+        'stale_ttl' => (int) env('COURTLISTENER_STALE_TTL', 86400),
+        'timeout' => (int) env('COURTLISTENER_TIMEOUT', 20),
+        'requests_per_minute' => (int) env('COURTLISTENER_REQUESTS_PER_MINUTE', 5),
+    ],
+
 ];

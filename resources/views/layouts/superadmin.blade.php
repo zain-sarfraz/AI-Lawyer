@@ -11,7 +11,9 @@
     <script>
         if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    @if(request()->routeIs('superadmin.dashboard'))
+        <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" onload="document.dispatchEvent(new Event('chartjs:loaded'))"></script>
+    @endif
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-full antialiased" x-data="{ mobileOpen: false }">
@@ -43,6 +45,7 @@
             @foreach($nav as $item)
                 @php $active = request()->routeIs($item['match']); @endphp
                 <a href="{{ route($item['route']) }}"
+                   data-nav-prefetch
                    class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition {{ $active ? 'bg-teal-500/15 text-teal-300 shadow-[inset_3px_0_0_0_#128a82]' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                     <x-ui.icon :name="$item['icon']" />
                     <span>{{ $item['label'] }}</span>
@@ -89,22 +92,33 @@
 </div>
 
 @php
-    $modalFirms = \App\Models\Firm::query()
-        ->orderBy('firm_name')
-        ->get(['id', 'firm_name', 'status']);
+    $showCreateFirmModal = request()->routeIs('superadmin.dashboard', 'superadmin.firms.index', 'superadmin.admins.index');
+    $showFirmActionModals = request()->routeIs('superadmin.firms.index', 'superadmin.firms.show');
+    $showAdminModals = request()->routeIs('superadmin.dashboard', 'superadmin.admins.index', 'superadmin.firms.show');
+    $modalFirms = $showAdminModals
+        ? \App\Models\Firm::query()->orderBy('firm_name')->get(['id', 'firm_name', 'status'])
+        : collect();
     $modalFirmsActive = $modalFirms->where('status', 'active')->values();
 @endphp
-@include('superadmin.partials.create-firm-modal')
-@include('superadmin.partials.edit-firm-modal')
-@include('superadmin.partials.add-admin-modal', [
-    'modalFirms' => $modalFirmsActive,
-    'selectedFirmId' => old('firm_id', request('firm_id')),
-])
-@include('superadmin.partials.edit-admin-modal', [
-    'modalFirms' => $modalFirms,
-])
-@include('superadmin.partials.delete-admin-modal')
-@include('superadmin.partials.delete-firm-modal')
+@if($showCreateFirmModal)
+    @include('superadmin.partials.create-firm-modal')
+@endif
+@if($showFirmActionModals)
+    @include('superadmin.partials.edit-firm-modal')
+    @include('superadmin.partials.delete-firm-modal')
+@endif
+@if($showAdminModals)
+    @include('superadmin.partials.add-admin-modal', [
+        'modalFirms' => $modalFirmsActive,
+        'selectedFirmId' => old('firm_id', request('firm_id')),
+    ])
+    @if(request()->routeIs('superadmin.admins.index', 'superadmin.firms.show'))
+        @include('superadmin.partials.edit-admin-modal', [
+            'modalFirms' => $modalFirms,
+        ])
+        @include('superadmin.partials.delete-admin-modal')
+    @endif
+@endif
 @stack('scripts')
 </body>
 </html>

@@ -9,6 +9,7 @@
             'id' => $lawyer->id,
             'name' => $lawyer->displayName(),
             'title' => $lawyer->title ?: 'Counsel',
+            'country' => $lawyer->country,
             'phone' => $lawyer->phone,
             'email' => $lawyer->user?->email,
             'experience' => $lawyer->experience,
@@ -102,10 +103,10 @@
                         <x-ui.icon name="clock" class="h-3.5 w-3.5" />
                         Availability
                     </a>
-                    <button type="button" class="lawyer-action is-details" @click="$store.lawyerUi.openDetails(@js($card))">
+                    <a href="{{ route('lawyers.show', $lawyer) }}" class="lawyer-action is-details">
                         <x-ui.icon name="eye" class="h-3.5 w-3.5" />
                         Details
-                    </button>
+                    </a>
                     <button type="button" class="lawyer-action is-edit" @click="$store.lawyerUi.openEdit({{ $lawyer->id }})">
                         <x-ui.icon name="pencil" class="h-3.5 w-3.5" />
                         Edit
@@ -130,6 +131,6 @@
 @include('admin.lawyers._delete-modal')
 
 @foreach($lawyers as $lawyer)
-    @include('admin.lawyers._edit-modal', ['lawyer' => $lawyer->loadMissing('user', 'services')])
+    @include('admin.lawyers._edit-modal', ['lawyer' => $lawyer->loadMissing('user', 'services', 'jurisdictions')])
 @endforeach
 @endsection

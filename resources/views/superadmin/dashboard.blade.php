@@ -493,11 +493,24 @@ function superadminDashboard(config) {
         filterSource: 'all',
         searchQuery: '',
         selectedAppt: null,
+        chartReadyListener: null,
 
         init() {
             this.$nextTick(() => {
+                if (typeof Chart === 'undefined') {
+                    this.chartReadyListener = () => this.$nextTick(() => this.initCharts());
+                    document.addEventListener('chartjs:loaded', this.chartReadyListener, { once: true });
+                    return;
+                }
+
                 this.initCharts();
             });
+        },
+
+        destroy() {
+            if (this.chartReadyListener) {
+                document.removeEventListener('chartjs:loaded', this.chartReadyListener);
+            }
         },
 
         filterByAdmin(adminId, adminName) {

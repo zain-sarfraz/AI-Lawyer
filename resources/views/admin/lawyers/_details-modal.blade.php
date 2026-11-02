@@ -23,6 +23,10 @@
                 <dd x-text="$store.lawyerUi.details?.email || '—'"></dd>
             </div>
             <div>
+                <dt>Country</dt>
+                <dd x-text="$store.lawyerUi.details?.country || '—'"></dd>
+            </div>
+            <div>
                 <dt>Experience</dt>
                 <dd x-text="$store.lawyerUi.details?.experience || '—'"></dd>
             </div>

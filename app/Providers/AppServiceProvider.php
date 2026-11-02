@@ -6,6 +6,8 @@ use App\Auth\FirmAwareUserProvider;
 use App\Domain\Calendar\CalendarSyncProvider;
 use App\Domain\Calendar\NullCalendarSyncProvider;
 use App\Domain\Firm\FirmContext;
+use App\Domain\Legal\Contracts\LegalDataProvider;
+use App\Domain\Legal\LegalDataProviderRegistry;
 use App\Domain\Scheduling\FirmTime;
 use App\Models\FirmSetting;
 use App\Policies\FirmPolicy;
@@ -24,6 +26,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(FirmContext::class);
         $this->app->singleton(FirmTime::class);
         $this->app->bind(CalendarSyncProvider::class, NullCalendarSyncProvider::class);
+
+        // Legal research: country-aware provider registry (see config/legal.php).
+        $this->app->singleton(LegalDataProviderRegistry::class, fn () => new LegalDataProviderRegistry(
+            (array) config('legal.providers', [])
+        ));
+        $this->app->bind(LegalDataProvider::class, fn () => app(LegalDataProviderRegistry::class)->default());
     }
 
     /**

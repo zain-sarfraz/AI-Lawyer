@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AiReceptionistController;
 use App\Http\Controllers\Admin\AppointmentController;
 use App\Http\Controllers\Admin\CallController;
+use App\Http\Controllers\Admin\CaseResearchController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CrmDocumentController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -83,6 +84,8 @@ Route::middleware(['auth', 'verified', 'active', 'firm'])->group(function () {
     Route::post('notifications/appointments/mark-read', [NotificationController::class, 'markAppointmentsRead'])->name('notifications.appointments.mark-read');
 
     Route::resource('services', ServiceController::class)->except(['show']);
+    Route::get('lawyers/{lawyer}/relevant-cases', [LawyerController::class, 'relevantCases'])->name('lawyers.relevant-cases');
+    Route::get('lawyers/{lawyer}/case-law/{caseLaw}', [LawyerController::class, 'caseLawShow'])->name('lawyers.case-law.show');
     Route::resource('lawyers', LawyerController::class);
     Route::get('users', [UserController::class, 'index'])->name('users.index');
     Route::post('users', [UserController::class, 'store'])->name('users.store');
@@ -116,6 +119,16 @@ Route::middleware(['auth', 'verified', 'active', 'firm'])->group(function () {
     Route::post('ai-receptionist/synthflow/test-call', [AiReceptionistController::class, 'testCall'])->name('ai.synthflow.test-call');
 
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+
+    Route::get('case-research', [CaseResearchController::class, 'index'])->name('case-research.index');
+    Route::get('case-research/search', [CaseResearchController::class, 'search'])->name('case-research.search');
+    Route::get('case-research/records/{caseLaw}', [CaseResearchController::class, 'show'])->name('case-research.show');
+    Route::get('case-research/api/search', [CaseResearchController::class, 'apiSearch'])->name('case-research.api.search');
+    Route::get('case-research/api/case/{caseId}', [CaseResearchController::class, 'apiCase'])
+        ->whereNumber('caseId')->name('case-research.api.case');
+    Route::get('case-research/api/courts', [CaseResearchController::class, 'apiCourts'])->name('case-research.api.courts');
+    Route::get('case-research/api/coverage', [CaseResearchController::class, 'apiCoverage'])->name('case-research.api.coverage');
+    Route::get('case-research/api/case-types', [CaseResearchController::class, 'apiCaseTypes'])->name('case-research.api.case-types');
 
     Route::get('settings', [SettingsController::class, 'edit'])->name('settings.edit');
     Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');

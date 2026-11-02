@@ -1,10 +1,11 @@
-<x-ui.modal name="create-lawyer" title="New lawyer" subtitle="Name, services, phone, email, and experience" maxWidth="md">
+<x-ui.modal name="create-lawyer" title="New lawyer" subtitle="Phone dial code is separate from practice jurisdictions" maxWidth="lg">
     <form id="create-lawyer-form" method="POST" action="{{ route('lawyers.store') }}">
         @csrf
         @include('admin.lawyers._fields', [
             'lawyer' => $formLawyer,
             'services' => $formServices,
             'selectedServices' => [],
+            'activeJurisdictions' => $activeJurisdictions,
             'idPrefix' => 'create_lawyer',
             'modalName' => 'create-lawyer',
         ])

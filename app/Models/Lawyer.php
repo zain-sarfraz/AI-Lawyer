@@ -16,7 +16,7 @@ class Lawyer extends Model
     use BelongsToFirm, RestrictsToAssignedLawyer;
 
     protected $fillable = [
-        'firm_id', 'user_id', 'title', 'phone', 'experience', 'bio', 'specialties', 'timezone', 'status', 'slug',
+        'firm_id', 'user_id', 'title', 'country', 'phone', 'experience', 'bio', 'specialties', 'timezone', 'status', 'slug',
     ];
 
     protected function casts(): array
@@ -48,6 +48,11 @@ class Lawyer extends Model
     public function services(): BelongsToMany
     {
         return $this->belongsToMany(Service::class);
+    }
+
+    public function jurisdictions(): BelongsToMany
+    {
+        return $this->belongsToMany(Jurisdiction::class, 'lawyer_jurisdiction')->withTimestamps();
     }
 
     public function workingHours(): HasMany

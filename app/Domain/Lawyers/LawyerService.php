@@ -12,9 +12,9 @@ class LawyerService
 {
     public function __construct(private readonly AuditLogService $audit) {}
 
-    public function create(array $data, ?array $userData = null, array $serviceIds = []): Lawyer
+    public function create(array $data, ?array $userData = null, array $serviceIds = [], array $jurisdictionIds = []): Lawyer
     {
-        return DB::transaction(function () use ($data, $userData, $serviceIds) {
+        return DB::transaction(function () use ($data, $userData, $serviceIds, $jurisdictionIds) {
             if ($userData) {
                 $user = User::query()->create([
                     'name' => $userData['name'],
@@ -31,6 +31,7 @@ class LawyerService
             if ($serviceIds) {
                 $lawyer->services()->sync($serviceIds);
             }
+            $lawyer->jurisdictions()->sync($jurisdictionIds);
 
             // Default weekly windows (Mon–Fri 09:00–17:00). Lawyers can edit under Availability.
             foreach ([1, 2, 3, 4, 5] as $dayOfWeek) {
@@ -45,20 +46,23 @@ class LawyerService
 
             $this->audit->log('lawyer.created', $lawyer, null, $lawyer->toArray());
 
-            return $lawyer->load('user', 'services');
+            return $lawyer->load('user', 'services', 'jurisdictions');
         });
     }
 
-    public function update(Lawyer $lawyer, array $data, ?array $serviceIds = null): Lawyer
+    public function update(Lawyer $lawyer, array $data, ?array $serviceIds = null, ?array $jurisdictionIds = null): Lawyer
     {
         $old = $lawyer->toArray();
         $lawyer->fill($data)->save();
         if (is_array($serviceIds)) {
             $lawyer->services()->sync($serviceIds);
         }
+        if (is_array($jurisdictionIds)) {
+            $lawyer->jurisdictions()->sync($jurisdictionIds);
+        }
         $this->audit->log('lawyer.updated', $lawyer, $old, $lawyer->fresh()->toArray());
 
-        return $lawyer->fresh()->load('user', 'services');
+        return $lawyer->fresh()->load('user', 'services', 'jurisdictions');
     }
 
     public function delete(Lawyer $lawyer): string
@@ -67,6 +71,7 @@ class LawyerService
             $old = $lawyer->toArray();
 
             $lawyer->services()->detach();
+            $lawyer->jurisdictions()->detach();
             $lawyer->appointments()->delete();
             $user = $lawyer->user;
             $lawyer->delete();

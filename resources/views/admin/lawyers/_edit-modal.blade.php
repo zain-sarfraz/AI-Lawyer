@@ -7,7 +7,7 @@
     :name="$modalName"
     title="Edit lawyer"
     :subtitle="$lawyer->displayName()"
-    maxWidth="md"
+    maxWidth="lg"
 >
     <form id="{{ $modalName }}-form" method="POST" action="{{ route('lawyers.update', $lawyer) }}">
         @csrf
@@ -16,6 +16,7 @@
             'lawyer' => $lawyer,
             'services' => $formServices,
             'selectedServices' => old('_modal') === $modalName ? old('service_ids', $selectedServices) : $selectedServices,
+            'activeJurisdictions' => $activeJurisdictions,
             'idPrefix' => 'edit_lawyer_'.$lawyer->id,
             'modalName' => $modalName,
         ])

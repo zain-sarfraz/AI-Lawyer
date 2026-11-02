@@ -7,6 +7,48 @@ window.Turbo = Turbo;
 // Soft page navigations (no full browser refresh).
 Turbo.session.drive = true;
 
+// Cases page: debounce search while selects submit immediately via onchange.
+let caseFilterSearchTimer = null;
+window.__caseFilterSearch = (form) => {
+    clearTimeout(caseFilterSearchTimer);
+    caseFilterSearchTimer = setTimeout(() => form.requestSubmit(), 400);
+};
+
+const prefetchedNavigationLinks = new WeakSet();
+
+function preloadSidebarLink(event) {
+    const target = event.target;
+    const link = target instanceof Element ? target.closest('a[data-nav-prefetch]') : null;
+    const url = link ? new URL(link.href) : null;
+
+    if (
+        !link
+        || prefetchedNavigationLinks.has(link)
+        || !url
+        || url.origin !== window.location.origin
+        || (url.pathname === window.location.pathname && url.search === window.location.search)
+        || link.hasAttribute('download')
+        || (link.target && link.target !== '_self')
+        || link.closest('[data-turbo="false"]')
+    ) {
+        return;
+    }
+
+    if (event.type === 'pointerover' && link.contains(event.relatedTarget)) {
+        return;
+    }
+    prefetchedNavigationLinks.add(link);
+    prefetchedNavigationLinks.add(link);
+    const prefetchContainer = document.createElement('div');
+    const prefetchLink = link.cloneNode();
+    prefetchLink.dataset.turboPreload = '';
+    prefetchContainer.append(prefetchLink);
+    Turbo.session.preloadOnLoadLinksForView(prefetchContainer);
+}
+
+document.addEventListener('pointerover', preloadSidebarLink, { passive: true });
+document.addEventListener('focusin', preloadSidebarLink);
+
 document.addEventListener('turbo:before-cache', () => {
     // Avoid restoring open Alpine dropdowns / modals from bfcache.
     document.querySelectorAll('[x-cloak]').forEach((el) => {
@@ -20,6 +62,29 @@ document.addEventListener('turbo:before-render', () => {
     }
 });
 
+
+Alpine.data('lawyerPhoneForm', (initialCountry = '', initialLocal = '') => ({
+    phoneCountry: (initialCountry || '').toUpperCase(),
+    phoneLocal: initialLocal || '',
+    dialMap: { PK: '+92', GB: '+44' },
+    get dialCode() {
+        return this.dialMap[this.phoneCountry] || '';
+    },
+    get previewE164() {
+        const local = String(this.phoneLocal || '').replace(/\D/g, '').replace(/^0+/, '');
+        if (!this.dialCode || !local) return '';
+        return `${this.dialCode}${local}`;
+    },
+    onCountryChange() {
+        this.sanitizeLocal();
+    },
+    sanitizeLocal() {
+        // Keep digits only; strip a single leading 0 so PK 0324… never becomes +440324…
+        let digits = String(this.phoneLocal || '').replace(/\D/g, '');
+        digits = digits.replace(/^0+/, '');
+        this.phoneLocal = digits;
+    },
+}));
 
 Alpine.data('shell', () => ({
     mobileOpen: false,
@@ -502,6 +567,501 @@ Alpine.data('appointmentNotifier', (urls = {}) => ({
         } catch (err) {
             console.warn('Could not play notification chime:', err);
         }
+    },
+}));
+
+/* ------------------------------------------------------------------
+ |  Cases (legal research) — provider-backed search screen.
+ |
+ |  Registered here rather than inline in a Blade @push so that the
+ |  component still exists after Turbo Drive swaps the body: the first
+ |  navigation calls Alpine.start(), later ones only Alpine.initTree().
+ | ------------------------------------------------------------------ */
+
+Alpine.data('caseResearch', (initial, routes, initialFilters, knownTypes, initialCategoryLabel, categoryMap) => ({
+    loading: false,
+    data: initial || {},
+    filters: initialFilters || {},
+    routes,
+    knownTypes: knownTypes || [],
+    categoryMap: categoryMap || {},
+    categoryLabel: initialCategoryLabel || '',
+    courts: [],
+    courtsLoading: false,
+    courtsTried: false,
+    countdown: 0,
+    countdownTimer: null,
+    detail: null,
+    detailLoading: false,
+    detailError: '',
+    today: new Date().toISOString().slice(0, 10),
+    request: null,
+
+    boot() {
+        this.data = this.normalise(this.data);
+        this.startCountdown();
+    },
+
+    destroy() {
+        if (this.countdownTimer) {
+            clearInterval(this.countdownTimer);
+            this.countdownTimer = null;
+        }
+    },
+
+    normalise(payload) {
+        return Object.assign({
+            results: [],
+            total: 0,
+            page: 1,
+            per_page: 20,
+            total_pages: 0,
+            has_next: false,
+            has_prev: false,
+            reason: 'empty',
+            message: null,
+            stale: false,
+            retry_after: null,
+            provider: 'CourtListener',
+            country: '',
+            stats: { total_found: 0, analyzed: 0, outcomes: {}, classifiable: 0, win_pct: null, loss_pct: null, outcome_note: null },
+            range: { date_from: '', date_to: '' },
+            hidden_by_outcome: 0,
+        }, payload || {});
+    },
+
+    /* ---------------- Filter interactions ---------------- */
+
+    typeOptions() {
+        const facetKeys = Object.keys(this.data.stats?.case_types || {});
+        return Array.from(new Set([...this.knownTypes, ...facetKeys])).sort((a, b) => a.localeCompare(b));
+    },
+
+    onCategoryChange() {
+        this.categoryLabel = this.categoryLabels()[this.filters.category] || '';
+        this.filters.case_type = '';
+        this.apply(1);
+    },
+
+    categoryLabels() {
+        return this.categoryMap;
+    },
+
+    onRangeChange() {
+        if (this.filters.date_range !== 'custom') {
+            this.filters.date_from = '';
+            this.filters.date_to = '';
+        }
+        this.apply(1);
+    },
+
+    hasFilters() {
+        return ['category', 'q', 'case_type', 'court', 'country', 'outcome']
+            .some((key) => (this.filters[key] || '') !== '');
+    },
+
+    resetFilters() {
+        Object.assign(this.filters, {
+            category: '', q: '', case_type: '', court: '', country: '', outcome: '',
+            date_range: '2y', date_from: '', date_to: '', page: 1,
+        });
+        this.categoryLabel = '';
+        this.apply(1);
+    },
+
+    apply(page) {
+        this.filters.page = page || 1;
+        this.fetchResults();
+    },
+
+    goPage(page) {
+        if (page < 1 || (this.data.total_pages && page > this.data.total_pages)) {
+            return;
+        }
+        this.apply(page);
+    },
+
+    query(params) {
+        const search = new URLSearchParams();
+        Object.entries(params || this.filters).forEach(([key, value]) => {
+            if (value === '' || value === null || value === undefined) {
+                return;
+            }
+            search.set(key, value);
+        });
+        const built = search.toString();
+        return built ? `?${built}` : '';
+    },
+
+    pageUrl(page) {
+        return `${this.routes.search}${this.query({ ...this.filters, page })}`;
+    },
+
+    syncAddress() {
+        const url = `${this.routes.search}${this.query(this.filters)}`;
+        if (window.history?.replaceState) {
+            window.history.replaceState(null, '', url);
+        }
+    },
+
+    async fetchResults() {
+        if (this.request) {
+            this.request.abort();
+        }
+        this.request = new AbortController();
+        this.loading = true;
+
+        try {
+            const response = await fetch(`${this.routes.api}${this.query(this.filters)}`, {
+                signal: this.request.signal,
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok && !payload.reason) {
+                this.data = this.normalise({ ...payload, reason: 'error', message: `The search request failed (HTTP ${response.status}).` });
+                return;
+            }
+
+            this.data = this.normalise(payload);
+            this.syncAddress();
+            this.startCountdown();
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                this.data = this.normalise({ reason: 'error', message: 'Network error — the legal-data request did not complete.' });
+            }
+        } finally {
+            this.loading = false;
+            this.request = null;
+        }
+    },
+
+    /* ---------------- Court directory ---------------- */
+
+    async loadCourts() {
+        if (this.courtsLoading || this.courts.length > 0) {
+            return;
+        }
+        this.courtsLoading = true;
+        this.courtsTried = true;
+
+        try {
+            const response = await fetch(this.routes.courts, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json();
+            this.courts = (payload.courts || []).filter((court) => court.in_use !== false);
+        } catch (error) {
+            this.courts = [];
+        } finally {
+            this.courtsLoading = false;
+        }
+    },
+
+    /* ---------------- Presentation helpers ---------------- */
+
+    fmt(value) {
+        return Number(value || 0).toLocaleString();
+    },
+
+    fmtDate(value) {
+        if (!value) {
+            return 'Date not published';
+        }
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    },
+
+    clip(text, limit = 150) {
+        const clean = String(text || '').replace(/<[^>]*>/g, '');
+        return clean.length > limit ? `${clean.slice(0, limit)}…` : clean;
+    },
+
+    rangeLabel() {
+        const map = {
+            '1m': 'Last month', '3m': 'Previous months', '6m': 'Last 6 months',
+            '1y': 'Last 1 year', '2y': 'Last 2 years', custom: 'Custom range',
+        };
+        return map[this.filters.date_range] || 'Last 2 years';
+    },
+
+    courtMeta(record) {
+        const parts = [record.jurisdiction, record.country || 'US'].filter(Boolean);
+        return parts.join(' · ');
+    },
+
+    outcomeLabel(record) {
+        const map = { won: 'Won', lost: 'Lost', pending: 'Pending', unknown: 'Unknown' };
+        return map[record.outcome_class] || 'Unknown';
+    },
+
+    outcomeBreakdown() {
+        const outcomes = this.data.stats?.outcomes || {};
+        return `Won ${outcomes.won || 0} · Lost ${outcomes.lost || 0} · Pending ${outcomes.pending || 0} · Unknown ${outcomes.unknown || 0}`;
+    },
+
+    winLossDisplay() {
+        if (!this.data.stats?.classifiable) {
+            return 'Not verifiable';
+        }
+        return `${this.data.stats.win_pct}% W / ${this.data.stats.loss_pct}% L`;
+    },
+
+    notice() {
+        const reason = this.data.reason;
+
+        if (reason === 'unsupported_country') {
+            return `${this.data.message || 'No data source covers that country yet.'} CourtListener publishes United States records only; no results are shown rather than guessing.`;
+        }
+        if (reason === 'rate_limited' || this.data.stale) {
+            return this.data.message || 'Provider rate limit reached.';
+        }
+        if (reason === 'unconfigured') {
+            return this.data.message || 'The legal-data provider is not connected.';
+        }
+        if (reason === 'error') {
+            return this.data.message || 'The provider request failed. Existing records are unchanged.';
+        }
+        if (this.data.hidden_by_outcome > 0 && (this.data.results || []).length > 0) {
+            return `${this.data.hidden_by_outcome} record(s) on this page were hidden because their outcome is not verifiable as "${this.filters.outcome}".`;
+        }
+        return '';
+    },
+
+    noticeKind() {
+        const reason = this.data.reason;
+        if (reason === 'unsupported_country' || reason === 'unconfigured' || reason === 'error') {
+            return 'danger';
+        }
+        return reason === 'rate_limited' || this.data.stale || this.data.hidden_by_outcome > 0 ? 'warn' : 'info';
+    },
+
+    noticeTitle() {
+        return {
+            unsupported_country: 'Country not covered.',
+            unconfigured: 'Provider not connected.',
+            rate_limited: 'Rate limited.',
+            error: 'Request failed.',
+        }[this.data.reason] || (this.data.stale ? 'Cached results.' : 'Filter note.');
+    },
+
+    startCountdown() {
+        if (this.countdownTimer) {
+            clearInterval(this.countdownTimer);
+            this.countdownTimer = null;
+        }
+        if (this.data.reason !== 'rate_limited' || !this.data.retry_after) {
+            this.countdown = 0;
+            return;
+        }
+        this.countdown = Number(this.data.retry_after);
+        this.countdownTimer = setInterval(() => {
+            this.countdown -= 1;
+            if (this.countdown <= 0) {
+                clearInterval(this.countdownTimer);
+                this.countdownTimer = null;
+            }
+        }, 1000);
+    },
+
+    emptyHeading() {
+        return {
+            unsupported_country: 'That country has no connected data source',
+            unconfigured: 'No provider connected',
+            rate_limited: 'Temporarily rate limited',
+            error: 'The provider could not be reached',
+        }[this.data.reason] || 'No matching records';
+    },
+
+    emptyHint() {
+        if (this.data.reason === 'empty') {
+            return 'The provider returned no published opinions for this combination of category, court and decision date. Broaden the filters to check.';
+        }
+        return 'Adjust the filters and search again.';
+    },
+
+    /* ---------------- Case detail ---------------- */
+
+    openDetail(record) {
+        if (!record) {
+            return;
+        }
+        this.detail = record;
+        this.detailError = '';
+        this.detailLoading = false;
+        this.$dispatch('open-modal', 'case-detail');
+    },
+
+    async fetchFullRecord() {
+        const id = this.detail?.case_id;
+        if (!id || !/^\d+$/.test(String(id))) {
+            this.detailError = 'This record has no numeric source identifier, so the full entry cannot be requested.';
+            return;
+        }
+
+        this.detailLoading = true;
+        this.detailError = '';
+
+        try {
+            const response = await fetch(`${this.routes.case}/${id}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok || payload.ok === false) {
+                this.detailError = payload.message || 'The source record could not be retrieved.';
+            } else {
+                // Merge so nothing the search result already verified is lost when
+                // the source leaves a field empty.
+                const merged = { ...this.detail };
+                Object.entries(payload.case || {}).forEach(([key, value]) => {
+                    if (value !== '' && value !== null && value !== undefined) {
+                        merged[key] = value;
+                    }
+                });
+                this.detail = merged;
+            }
+        } catch (error) {
+            this.detailError = 'Network error while retrieving the source record.';
+        } finally {
+            this.detailLoading = false;
+        }
+    },
+
+    /**
+     * Explains exactly why an outcome is (or is not) classifiable. Never claims
+     * a win/loss the provider did not state.
+     */
+    outcomeNote() {
+        const record = this.detail;
+        if (!record) {
+            return '';
+        }
+
+        if (record.judgment_text && record.outcome_class !== 'unknown') {
+            return `The source states: “${record.judgment_text}”. Calling this Won or Lost also requires knowing which party the firm represented.`;
+        }
+        if (record.judgment_text) {
+            return `The source states: “${record.judgment_text}”. It does not identify which party prevailed, so the outcome stays Unknown.`;
+        }
+        if (record.outcome_class === 'pending') {
+            return 'The source lists this matter as still open, so it is reported as Pending.';
+        }
+
+        return 'CourtListener does not publish a party-relative judgment or disposition for this record, so the outcome cannot be verified and is reported as Unknown rather than guessed.';
+    },
+
+    detailRows() {
+        const record = this.detail;
+        if (!record) {
+            return [];
+        }
+
+        return [
+            { label: 'Case name', value: record.case_name || '—' },
+            { label: 'Case ID (source)', value: record.case_id || 'Not published' },
+            { label: 'Citation', value: record.citation || 'No citation in the source record' },
+            { label: 'Docket number', value: record.docket_number || 'Not published' },
+            { label: 'Country', value: record.country || 'US' },
+            { label: 'Court', value: record.court_name || record.court_id || '—' },
+            { label: 'Court ID', value: record.court_id || 'Not published' },
+            { label: 'Jurisdiction', value: record.jurisdiction || 'Not stated by the provider' },
+            { label: 'Jurisdiction code', value: record.jurisdiction_code ? `${record.jurisdiction_code} (as published by the source)` : 'Not published for this record' },
+            { label: 'City / location', value: 'Not published — the court directory carries no city or state field' },
+            { label: 'Category', value: record.category || 'Not categorised' },
+            { label: 'Case type / nature of suit', value: record.nature_of_suit || 'Not stated by the provider' },
+            { label: 'Procedural posture', value: record.posture || 'Not stated' },
+            { label: 'Decision date', value: this.fmtDate(record.date_filed) },
+            { label: 'Precedential status', value: record.status || 'Not stated' },
+            { label: 'Judgment as published', value: record.judgment_text || 'The provider does not publish a disposition for this record' },
+            { label: 'Outcome classification', value: this.outcomeLabel(record) },
+            { label: 'Provider', value: record.provider || this.data.provider || 'CourtListener' },
+        ];
+    },
+}));
+
+/* ------------------------------------------------------------------
+ |  Cases landing page — verified coverage probe.
+ |
+ |  One category per request, stopped at the first rate limit so the
+ |  landing page can never consume the whole provider quota.
+ | ------------------------------------------------------------------ */
+
+Alpine.data('caseCoverage', (url, categories) => ({
+    states: {},
+    counts: {},
+    paused: false,
+
+    init() {
+        categories.forEach((key) => {
+            this.states[key] = 'checking';
+        });
+        this.probe(categories, 0);
+    },
+
+    async probe(categories, index) {
+        if (index >= categories.length) {
+            return;
+        }
+
+        const key = categories[index];
+
+        if (this.paused) {
+            this.states[key] = 'paused';
+            this.probe(categories, index + 1);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${url}?category=${encodeURIComponent(key)}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json();
+
+            if (payload.ok && payload.verified) {
+                this.counts[key] = payload.count;
+                this.states[key] = payload.count > 0 ? 'ready' : 'empty';
+            } else {
+                this.states[key] = 'paused';
+                this.paused = true; // provider throttling or outage: stop probing
+            }
+        } catch (error) {
+            this.states[key] = 'unreachable';
+            this.paused = true;
+        }
+
+        this.probe(categories, index + 1);
+    },
+
+    dotClass(key) {
+        return {
+            checking: 'is-checking',
+            ready: 'is-ready',
+            empty: 'is-empty',
+            paused: 'is-paused',
+            unreachable: 'is-paused',
+        }[this.states[key] || 'checking'];
+    },
+
+    labelFor(key) {
+        const state = this.states[key] || 'checking';
+
+        if (state === 'checking') {
+            return 'Checking coverage…';
+        }
+        if (state === 'ready') {
+            const count = Number(this.counts[key] || 0);
+            return `${count.toLocaleString()} decisions in the last 2 years`;
+        }
+        if (state === 'empty') {
+            return 'No published decisions for this category';
+        }
+        return 'Coverage not verified (provider rate limit)';
     },
 }));
 

@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
     {
         PermissionCatalog::sync();
 
+        $this->call(JurisdictionSeeder::class);
+
         // Platform Superadmin only — firm admins are created from the Superadmin portal.
         $userId = DB::table('users')->where('email', 'admin@admin.com')->value('id');
 

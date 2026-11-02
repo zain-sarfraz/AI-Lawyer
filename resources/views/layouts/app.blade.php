@@ -43,6 +43,7 @@
         ['group' => 'Firm', 'items' => [
             ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users', 'permission' => 'clients.view'],
             ['route' => 'cases.index', 'match' => 'cases.*', 'label' => 'Cases Management', 'icon' => 'scales', 'permission' => 'cases.view'],
+            ['route' => 'case-research.index', 'match' => 'case-research.*', 'label' => 'Cases', 'icon' => 'book-open', 'permission' => 'cases.view', 'lawyer_only' => true],
             ['route' => 'lawyers.index', 'match' => 'lawyers.*', 'label' => 'Lawyers', 'icon' => 'briefcase', 'permission' => 'lawyers.manage'],
             ['route' => 'services.index', 'match' => 'services.*', 'label' => 'Services', 'icon' => 'journal', 'permission' => 'services.manage'],
             ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart', 'permission' => 'reports.view'],
@@ -54,6 +55,10 @@
     $nav = collect($nav)->map(function (array $section) use ($allows, $isRestrictedLawyer) {
         $section['items'] = collect($section['items'])
             ->filter(function (array $item) use ($allows, $isRestrictedLawyer) {
+                if (! empty($item['lawyer_only']) && ! $isRestrictedLawyer) {
+                    return false;
+                }
+
                 if ($isRestrictedLawyer && in_array($item['route'], ['clients.index', 'lawyers.index', 'services.index', 'ai.show', 'settings.edit'], true)) {
                     return false;
                 }
@@ -108,6 +113,7 @@
                     @foreach($section['items'] as $item)
                         @php $active = request()->routeIs($item['match']); @endphp
                         <a href="{{ route($item['route']) }}"
+                           data-nav-prefetch
                            title="{{ $item['label'] }}"
                            class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition {{ $active ? 'bg-teal-500/20 text-teal-300 shadow-[inset_0_0_0_1px_rgba(45,212,191,0.25)]' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                             <x-ui.icon :name="$item['icon']" class="{{ $active ? 'text-teal-300' : '' }}" />

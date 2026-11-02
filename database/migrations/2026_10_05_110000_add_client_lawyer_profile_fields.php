@@ -24,8 +24,14 @@ return new class extends Migration
         }
 
         Schema::table('lawyers', function (Blueprint $table) {
+            if (! Schema::hasColumn('lawyers', 'title')) {
+                $table->string('title')->nullable()->after('user_id');
+            }
+            if (! Schema::hasColumn('lawyers', 'country')) {
+                $table->string('country', 128)->nullable()->after('title');
+            }
             if (! Schema::hasColumn('lawyers', 'phone')) {
-                $table->string('phone', 50)->nullable()->after('title');
+                $table->string('phone', 50)->nullable()->after('country');
             }
             if (! Schema::hasColumn('lawyers', 'experience')) {
                 $table->string('experience', 255)->nullable()->after('phone');
@@ -44,7 +50,7 @@ return new class extends Migration
         });
 
         Schema::table('lawyers', function (Blueprint $table) {
-            $columns = collect(['phone', 'experience'])
+            $columns = collect(['country', 'phone', 'experience'])
                 ->filter(fn (string $column) => Schema::hasColumn('lawyers', $column))
                 ->all();
             if ($columns !== []) {
