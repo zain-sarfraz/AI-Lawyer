@@ -10,12 +10,14 @@ class Jurisdiction extends Model
 {
     protected $fillable = [
         'code', 'country_code', 'name', 'is_active',
+        'last_case_fetch_at', 'last_case_fetch_status', 'last_case_fetch_message',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'last_case_fetch_at' => 'datetime',
         ];
     }
 

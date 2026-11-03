@@ -107,13 +107,8 @@ class CaseResearchController extends Controller implements HasMiddleware
             $query->where('disposition', $disposition->value);
         }
 
-        // Default: hide seeded demo rows so lawyers see fetched/real data first.
-        $hideDemo = $request->has('hide_demo')
-            ? $request->boolean('hide_demo')
-            : true;
-        if ($hideDemo) {
-            $query->hideDemo();
-        }
+        // Never surface demo or incomplete source rows.
+        $query->realOnly();
 
         $cases = $query
             ->orderByDesc('decision_date')
@@ -134,6 +129,7 @@ class CaseResearchController extends Controller implements HasMiddleware
         $caseTypes = ['criminal', 'civil', 'writ', 'appeal', 'family', 'tax', 'other'];
 
         $years = CaseLawRecord::query()
+            ->realOnly()
             ->whereIn('jurisdiction_id', $jurisdictionIds ?: [0])
             ->whereNotNull('decision_date')
             ->selectRaw('YEAR(decision_date) as y')
@@ -145,6 +141,17 @@ class CaseResearchController extends Controller implements HasMiddleware
             $lawyer->load('jurisdictions');
         }
 
+        $fetchMeta = Jurisdiction::query()
+            ->whereIn('id', $jurisdictionIds ?: [0])
+            ->get()
+            ->map(fn (Jurisdiction $j) => [
+                'name' => $j->name,
+                'status' => $j->last_case_fetch_status,
+                'at' => optional($j->last_case_fetch_at)?->toDateTimeString(),
+                'message' => $j->last_case_fetch_message,
+            ])
+            ->all();
+
         return view('admin.case-research.index', [
             'lawyer' => $lawyer,
             'cases' => $cases,
@@ -152,6 +159,7 @@ class CaseResearchController extends Controller implements HasMiddleware
             'courts' => $courts,
             'caseTypes' => $caseTypes,
             'years' => $years,
+            'fetchMeta' => $fetchMeta,
             'filters' => [
                 'q' => $search,
                 'jurisdiction_id' => $request->input('jurisdiction_id'),
@@ -159,7 +167,6 @@ class CaseResearchController extends Controller implements HasMiddleware
                 'year' => $request->input('year'),
                 'case_type' => $request->input('case_type'),
                 'disposition' => $request->input('disposition'),
-                'hide_demo' => $hideDemo,
             ],
             'dispositions' => CaseDisposition::cases(),
         ]);
@@ -179,6 +186,10 @@ class CaseResearchController extends Controller implements HasMiddleware
 
         if (! in_array((int) $caseLaw->jurisdiction_id, array_map('intval', $allowed), true)) {
             abort(403);
+        }
+
+        if (! $caseLaw->isRealForUi()) {
+            abort(404);
         }
 
         $caseLaw->load(['jurisdiction', 'court']);

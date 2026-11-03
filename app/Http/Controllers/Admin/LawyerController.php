@@ -39,7 +39,7 @@ class LawyerController extends Controller implements HasMiddleware
             'lawyers' => Lawyer::query()->with(['user', 'services', 'jurisdictions'])->paginate(25),
             'formLawyer' => new Lawyer(['status' => 'active']),
             'formServices' => Service::query()->orderBy('name')->get(),
-            'activeJurisdictions' => $this->activeJurisdictionsGrouped(),
+            'activeJurisdictions' => $this->activeJurisdictionsByCountry(),
         ]);
     }
 
@@ -54,8 +54,13 @@ class LawyerController extends Controller implements HasMiddleware
     {
         $this->authorize('create', Lawyer::class);
 
-        $data = $this->validatedLawyer($request);
-        $phone = $this->normalizedPhone($data['phone_country'], $data['phone_local'] ?? null);
+        try {
+            $data = $this->validatedLawyer($request);
+            $phone = $this->normalizedPhone($data['phone_country'], $data['phone_local'] ?? null);
+            $jurisdictionIds = $this->validatedJurisdictionIds($data['jurisdiction_ids'] ?? []);
+        } catch (ValidationException $e) {
+            throw $e->redirectTo(route('lawyers.index', ['open' => 'create-lawyer']));
+        }
 
         $this->lawyers->create(
             [
@@ -74,7 +79,7 @@ class LawyerController extends Controller implements HasMiddleware
                 'password' => $data['password'] ?? 'password',
             ],
             $data['service_ids'] ?? [],
-            $data['jurisdiction_ids'] ?? []
+            $jurisdictionIds
         );
 
         return redirect()->route('lawyers.index')->with('success', 'Lawyer created.');
@@ -103,6 +108,7 @@ class LawyerController extends Controller implements HasMiddleware
         $query = CaseLawRecord::query()
             ->with(['jurisdiction', 'court'])
             ->forJurisdictions($jurisdictionIds)
+            ->realOnly()
             ->latest('decision_date');
 
         if ($search = trim((string) $request->input('q', ''))) {
@@ -141,6 +147,7 @@ class LawyerController extends Controller implements HasMiddleware
             ->get();
 
         $caseTypes = CaseLawRecord::query()
+            ->realOnly()
             ->whereIn('jurisdiction_id', $jurisdictionIds ?: [0])
             ->whereNotNull('case_type')
             ->distinct()
@@ -148,6 +155,7 @@ class LawyerController extends Controller implements HasMiddleware
             ->pluck('case_type');
 
         $years = CaseLawRecord::query()
+            ->realOnly()
             ->whereIn('jurisdiction_id', $jurisdictionIds ?: [0])
             ->whereNotNull('decision_date')
             ->selectRaw('YEAR(decision_date) as y')
@@ -155,10 +163,19 @@ class LawyerController extends Controller implements HasMiddleware
             ->orderByDesc('y')
             ->pluck('y');
 
+        $fetchMeta = $lawyer->jurisdictions
+            ->map(fn (Jurisdiction $j) => [
+                'name' => $j->name,
+                'status' => $j->last_case_fetch_status,
+                'at' => optional($j->last_case_fetch_at)?->toDateTimeString(),
+                'message' => $j->last_case_fetch_message,
+            ])
+            ->all();
+
         return view('admin.lawyers.show', [
             'lawyer' => $lawyer,
             'tab' => 'cases',
-            'cases' => $query->orderByDesc('decision_date')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'cases' => $query->orderByDesc('decision_date')->orderByDesc('id')->paginate(50)->withQueryString(),
             'filters' => [
                 'q' => $search,
                 'jurisdiction_id' => $request->input('jurisdiction_id'),
@@ -171,6 +188,7 @@ class LawyerController extends Controller implements HasMiddleware
             'caseTypes' => $caseTypes,
             'years' => $years,
             'dispositions' => CaseDisposition::cases(),
+            'fetchMeta' => $fetchMeta,
         ]);
     }
 
@@ -180,6 +198,9 @@ class LawyerController extends Controller implements HasMiddleware
         $this->authorize('viewCaseLaw', [$lawyer, $caseLaw]);
 
         $lawyer->load('jurisdictions');
+        if (! $caseLaw->isRealForUi()) {
+            abort(404);
+        }
         $caseLaw->load(['jurisdiction', 'court']);
 
         return view('admin.lawyers.case-law-show', [
@@ -230,15 +251,13 @@ class LawyerController extends Controller implements HasMiddleware
             'bio' => $data['bio'] ?? null,
             'timezone' => $data['timezone'] ?? null,
             'status' => $data['status'],
-        ], $data['service_ids'] ?? [], $data['jurisdiction_ids'] ?? []);
+        ], $data['service_ids'] ?? [], $this->validatedJurisdictionIds($data['jurisdiction_ids'] ?? []));
 
         return redirect()->route('lawyers.index')->with('success', 'Lawyer updated.');
     }
 
     private function validatedLawyer(Request $request, ?Lawyer $lawyer = null): array
     {
-        $activeIds = Jurisdiction::query()->active()->pluck('id')->all();
-
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -248,9 +267,11 @@ class LawyerController extends Controller implements HasMiddleware
                     ? Rule::unique('users', 'email')->ignore($lawyer->user_id)
                     : Rule::unique('users', 'email'),
             ],
-            'password' => [$lawyer ? 'nullable' : 'nullable', 'string', 'min:8'],
-            'phone_country' => ['required', 'string', Rule::in(['PK', 'GB'])],
+            'password' => ['nullable', 'string', 'min:8'],
+            'phone_country' => ['required', 'string', Rule::in(['PK', 'GB', 'US'])],
             'phone_local' => ['nullable', 'string', 'max:32'],
+            'jurisdiction_ids' => ['required', 'array', 'min:1'],
+            'jurisdiction_ids.*' => ['integer', 'distinct', 'exists:jurisdictions,id'],
             'experience' => ['nullable', 'string', 'max:255'],
             'title' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
@@ -258,9 +279,53 @@ class LawyerController extends Controller implements HasMiddleware
             'status' => ['required', 'string'],
             'service_ids' => ['array'],
             'service_ids.*' => ['exists:services,id'],
-            'jurisdiction_ids' => ['required', 'array', 'min:1'],
-            'jurisdiction_ids.*' => ['integer', Rule::in($activeIds)],
+        ], [
+            'jurisdiction_ids.required' => 'Select at least one practice jurisdiction checkbox.',
+            'jurisdiction_ids.min' => 'Select at least one practice jurisdiction checkbox.',
+            'phone_country.required' => 'Select a phone dial country (PK / GB / US).',
+            'email.unique' => 'This email is already registered.',
+            'password.min' => 'Password must be at least 8 characters (or leave blank).',
         ]);
+    }
+
+    /** @return list<int> */
+    private function validatedJurisdictionIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $allowed = Jurisdiction::query()
+            ->active()
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($allowed === [] || count($allowed) !== count($ids)) {
+            throw ValidationException::withMessages([
+                'jurisdiction_ids' => 'Select one or more active practice jurisdictions.',
+            ]);
+        }
+
+        return $allowed;
+    }
+
+    /** @return array<string, list<array{id:int,code:string,name:string}>> */
+    private function activeJurisdictionsByCountry(): array
+    {
+        $grouped = [];
+        Jurisdiction::query()
+            ->active()
+            ->orderBy('country_code')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'country_code'])
+            ->each(function (Jurisdiction $j) use (&$grouped) {
+                $grouped[$j->country_code][] = [
+                    'id' => (int) $j->id,
+                    'code' => $j->code,
+                    'name' => $j->name,
+                ];
+            });
+
+        return $grouped;
     }
 
     private function normalizedPhone(string $country, ?string $local): ?string
@@ -276,15 +341,4 @@ class LawyerController extends Controller implements HasMiddleware
         }
     }
 
-    /** @return array<string, \Illuminate\Support\Collection<int, Jurisdiction>> */
-    private function activeJurisdictionsGrouped(): array
-    {
-        return Jurisdiction::query()
-            ->active()
-            ->orderBy('country_code')
-            ->orderBy('name')
-            ->get()
-            ->groupBy('country_code')
-            ->all();
-    }
 }

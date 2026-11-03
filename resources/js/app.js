@@ -63,10 +63,24 @@ document.addEventListener('turbo:before-render', () => {
 });
 
 
+window.__validateLawyerForm = (form) => {
+    const checked = form.querySelectorAll('input[name="jurisdiction_ids[]"]:checked');
+    if (!checked.length) {
+        alert('Select at least one practice jurisdiction (checkbox), then save.');
+        return false;
+    }
+    const phoneCountry = form.querySelector('[name="phone_country"]')?.value;
+    if (!phoneCountry) {
+        alert('Select a phone dial country.');
+        return false;
+    }
+    return true;
+};
+
 Alpine.data('lawyerPhoneForm', (initialCountry = '', initialLocal = '') => ({
     phoneCountry: (initialCountry || '').toUpperCase(),
     phoneLocal: initialLocal || '',
-    dialMap: { PK: '+92', GB: '+44' },
+    dialMap: { PK: '+92', GB: '+44', US: '+1' },
     get dialCode() {
         return this.dialMap[this.phoneCountry] || '';
     },
@@ -79,7 +93,80 @@ Alpine.data('lawyerPhoneForm', (initialCountry = '', initialLocal = '') => ({
         this.sanitizeLocal();
     },
     sanitizeLocal() {
-        // Keep digits only; strip a single leading 0 so PK 0324… never becomes +440324…
+        // Keep digits only; strip leading 0s so PK 0324… never becomes +440324…
+        let digits = String(this.phoneLocal || '').replace(/\D/g, '');
+        digits = digits.replace(/^0+/, '');
+        this.phoneLocal = digits;
+    },
+}));
+
+Alpine.data('lawyerPracticeForm', (initialCountry = '', initialLocal = '', jurisdictionsByCountry = {}, selectedIds = []) => ({
+    phoneCountry: (initialCountry || '').toUpperCase(),
+    phoneLocal: initialLocal || '',
+    // Filter only — never auto-check jurisdictions for a country.
+    practiceCountry: (initialCountry || '').toUpperCase(),
+    jurisdictionsByCountry: jurisdictionsByCountry || {},
+    selectedJurisdictions: (selectedIds || []).map(Number),
+    jurisOpen: false,
+    dialMap: { PK: '+92', GB: '+44', US: '+1' },
+    get dialCode() {
+        return this.dialMap[this.phoneCountry] || '';
+    },
+    get previewE164() {
+        const local = String(this.phoneLocal || '').replace(/\D/g, '').replace(/^0+/, '');
+        if (!this.dialCode || !local) return '';
+        return `${this.dialCode}${local}`;
+    },
+    onPhoneCountryChange() {
+        this.sanitizeLocal();
+        // Convenience: pre-fill practice-country filter once if empty. Does not pick jurisdictions.
+        if (this.phoneCountry && !this.practiceCountry) {
+            this.practiceCountry = this.phoneCountry;
+        }
+    },
+    onPracticeCountryChange() {
+        // Filter-only: open list for this country; do not auto-select or carry wrong labels.
+        this.jurisOpen = false;
+    },
+    visibleJurisdictions() {
+        if (!this.practiceCountry) {
+            return Object.values(this.jurisdictionsByCountry).flat();
+        }
+        return this.jurisdictionsByCountry[this.practiceCountry] || [];
+    },
+    toggleJurisdiction(id) {
+        const value = Number(id);
+        if (this.selectedJurisdictions.includes(value)) {
+            this.selectedJurisdictions = this.selectedJurisdictions.filter((item) => item !== value);
+        } else {
+            this.selectedJurisdictions = [...this.selectedJurisdictions, value];
+        }
+    },
+    jurisdictionLabel() {
+        const visible = this.visibleJurisdictions();
+        const visibleIds = new Set(visible.map((option) => Number(option.id)));
+        const names = visible
+            .filter((option) => this.selectedJurisdictions.includes(Number(option.id)))
+            .map((option) => option.name);
+        const otherCount = this.selectedJurisdictions.filter((id) => !visibleIds.has(Number(id))).length;
+
+        if (!names.length && !otherCount) {
+            return this.practiceCountry
+                ? 'Select jurisdictions for this country…'
+                : 'Select jurisdictions…';
+        }
+        if (!names.length && otherCount) {
+            return `Pick jurisdictions here (${otherCount} already selected in other countries)`;
+        }
+        let label = names.length <= 2
+            ? names.join(', ')
+            : names.slice(0, 2).join(', ') + ' +' + (names.length - 2) + ' more';
+        if (otherCount) {
+            label += ` (+${otherCount} other)`;
+        }
+        return label;
+    },
+    sanitizeLocal() {
         let digits = String(this.phoneLocal || '').replace(/\D/g, '');
         digits = digits.replace(/^0+/, '');
         this.phoneLocal = digits;

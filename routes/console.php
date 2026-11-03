@@ -13,6 +13,7 @@ if (config('case_law.fetch.enabled')) {
     Schedule::command('cases:fetch GB-EAW --limit=25')->dailyAt('02:45');
     Schedule::command('cases:fetch CA-FED --limit=25')->dailyAt('03:00');
     Schedule::command('cases:fetch CA-ON --limit=25')->dailyAt('03:15');
+    Schedule::command('cases:fetch US-FED --court=scotus --limit=25 --sync')->dailyAt('03:30');
 }
 
 Artisan::command('inspire', function () {

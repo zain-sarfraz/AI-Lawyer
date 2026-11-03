@@ -61,6 +61,27 @@ return [
         ],
     ],
 
+    'courtlistener' => [
+        'enabled' => (bool) env('COURTLISTENER_ENABLED', false),
+        'api_token' => env('COURTLISTENER_API_TOKEN'),
+        'base_url' => env('COURTLISTENER_BASE_URL', 'https://www.courtlistener.com/api/rest/v4'),
+        'timeout' => (int) env('COURTLISTENER_TIMEOUT', 30),
+        'default_court' => env('COURTLISTENER_DEFAULT_COURT', 'scotus'),
+        'max_per_minute' => (int) env('COURTLISTENER_MAX_PER_MINUTE', env('COURTLISTENER_REQUESTS_PER_MINUTE', 5)),
+        'max_per_hour' => (int) env('COURTLISTENER_MAX_PER_HOUR', 100),
+        'max_per_day' => (int) env('COURTLISTENER_MAX_PER_DAY', 500),
+        'retry_after_default' => (int) env('COURTLISTENER_RETRY_AFTER_DEFAULT', 60),
+        'bulk_column_map' => [
+            'external_id' => env('CL_BULK_COL_ID', 'id'),
+            'title' => env('CL_BULK_COL_TITLE', 'case_name'),
+            'citation' => env('CL_BULK_COL_CITATION', 'citation'),
+            'decision_date' => env('CL_BULK_COL_DATE', 'date_filed'),
+            'full_text' => env('CL_BULK_COL_TEXT', 'plain_text'),
+            'judgment_url' => env('CL_BULK_COL_URL', 'absolute_url'),
+            'court' => env('CL_BULK_COL_COURT', 'court_id'),
+        ],
+    ],
+
     'adapters' => [
         'GB-EAW' => App\Domain\CaseLaw\Adapters\UkFindCaseLawAdapter::class,
         'PK-SD' => App\Domain\CaseLaw\Adapters\PakistanCaseLawAdapter::class,
@@ -69,6 +90,7 @@ return [
         'PK-IS' => App\Domain\CaseLaw\Adapters\PakistanCaseLawAdapter::class,
         'CA-FED' => App\Domain\CaseLaw\Adapters\CanliiAdapter::class,
         'CA-ON' => App\Domain\CaseLaw\Adapters\CanliiAdapter::class,
+        'US-FED' => App\Domain\CaseLaw\Adapters\CourtListenerAdapter::class,
     ],
 
     'anthropic' => [

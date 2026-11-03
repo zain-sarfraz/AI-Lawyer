@@ -1,17 +1,10 @@
 @php
     $idPrefix = $idPrefix ?? 'lawyer';
     $selectedServices = $selectedServices ?? [];
-    $activeJurisdictions = $activeJurisdictions ?? collect();
-    $defaultJurisdictionIds = ($lawyer->exists ?? false)
-        ? $lawyer->jurisdictions()->pluck('jurisdictions.id')->all()
-        : [];
-    $selectedJurisdictionIds = collect(old('jurisdiction_ids', $defaultJurisdictionIds))
-        ->map(fn ($id) => (int) $id)
-        ->values()
-        ->all();
+    $activeJurisdictions = $activeJurisdictions ?? [];
 
     $phoneCountry = strtoupper((string) old('phone_country', $lawyer->country));
-    if (! in_array($phoneCountry, ['PK', 'GB'], true)) {
+    if (! in_array($phoneCountry, ['PK', 'GB', 'US'], true)) {
         $phoneCountry = '';
     }
     $split = \App\Support\Phone\PhoneNormalizer::split(old('phone_local') ? null : $lawyer->phone);
@@ -23,13 +16,24 @@
             $phoneCountry = $split['country'];
         }
     }
+
+    $selectedJurisdictionIds = collect(old('jurisdiction_ids', $lawyer->jurisdictions?->pluck('id')->all() ?? []))
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+
+    $practiceCountries = [
+        'PK' => 'Pakistan',
+        'GB' => 'United Kingdom',
+        'US' => 'United States',
+    ];
 @endphp
 
 <input type="hidden" name="_modal" value="{{ $modalName ?? '' }}">
 
 <div
     class="legal-form-section !border-0 !pb-0 !mb-0"
-    x-data="lawyerPhoneForm(@js($phoneCountry), @js($phoneLocal))"
+    x-data="lawyerPracticeForm(@js($phoneCountry), @js($phoneLocal), @js($activeJurisdictions), @js($selectedJurisdictionIds))"
 >
     <div class="row g-3">
         <div class="col-md-6">
@@ -44,10 +48,11 @@
         <div class="col-12">
             <label class="ui-label">Phone (formatting only)</label>
             <div class="grid gap-2 sm:grid-cols-[11rem_7rem_1fr]">
-                <select name="phone_country" class="ui-field" x-model="phoneCountry" @change="onCountryChange()" required>
+                <select name="phone_country" class="ui-field" x-model="phoneCountry" @change="onPhoneCountryChange()" required>
                     <option value="">Dial country</option>
                     <option value="PK">PK — Pakistan (+92)</option>
                     <option value="GB">GB — United Kingdom (+44)</option>
+                    <option value="US">US — United States (+1)</option>
                 </select>
                 <input type="text" class="ui-field bg-(--surface)" :value="dialCode" readonly tabindex="-1" aria-label="Dial code">
                 <input
@@ -64,42 +69,63 @@
             <p class="mt-1.5 text-xs text-(--muted)">
                 Enter the national number without a leading 0. Preview:
                 <span class="font-medium text-(--ink)" x-text="previewE164 || '—'"></span>
-                · Phone country is <em>not</em> the practice jurisdiction.
             </p>
+            @error('phone_country')
+                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+            @enderror
             @error('phone_local')
                 <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
             @enderror
         </div>
 
-        <div class="col-12">
-            <label class="ui-label">Jurisdictions <span class="text-red-500">*</span></label>
-            <p class="mb-2 text-xs text-(--muted)">Relevant case law is loaded from these jurisdictions only (independent of phone country).</p>
-            <div class="space-y-3 rounded-xl border border-(--line) p-3">
-                @forelse($activeJurisdictions as $countryCode => $items)
-                    <div>
-                        <div class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-(--muted)">{{ $countryCode }}</div>
-                        <div class="flex flex-wrap gap-3">
-                            @foreach($items as $j)
-                                <label class="inline-flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        class="ui-check-input"
-                                        name="jurisdiction_ids[]"
-                                        value="{{ $j->id }}"
-                                        @checked(in_array((int) $j->id, $selectedJurisdictionIds, true))
-                                    >
-                                    <span>{{ $j->name }} <span class="text-(--muted)">({{ $j->code }})</span></span>
-                                </label>
-                            @endforeach
-                        </div>
-                    </div>
-                @empty
-                    <p class="text-xs text-(--muted) mb-0">No active jurisdictions. Run <code>php artisan db:seed --class=JurisdictionSeeder</code>.</p>
-                @endempty
-            </div>
+        <div class="col-12 border-t border-(--line) pt-3">
+            <h3 class="mb-2 text-sm font-semibold text-(--ink)">Practice country / Jurisdictions</h3>
+            <p class="mb-3 text-xs text-(--muted)">
+                Pehle practice country choose karein, phir neeche checkbox se jurisdictions select karein (required).
+                Phone dial country alag hai.
+            </p>
+
             @error('jurisdiction_ids')
-                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                <div class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {{ $message }}
+                </div>
             @enderror
+
+            <div class="mb-3">
+                <label class="ui-label">Practice country</label>
+                <select class="ui-field max-w-md" x-model="practiceCountry">
+                    <option value="">All countries</option>
+                    @foreach($practiceCountries as $code => $label)
+                        <option value="{{ $code }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <label class="ui-label">Active jurisdictions</label>
+            <div class="mt-1 max-h-48 space-y-2 overflow-y-auto rounded-md border border-(--line) p-3">
+                @forelse($activeJurisdictions as $countryCode => $items)
+                    @foreach($items as $jur)
+                        <label
+                            class="flex items-center gap-2 text-sm text-(--ink)"
+                            x-show="!practiceCountry || practiceCountry === @js($countryCode)"
+                        >
+                            <input
+                                type="checkbox"
+                                class="ui-check-input"
+                                name="jurisdiction_ids[]"
+                                value="{{ $jur['id'] }}"
+                                @checked(in_array((int) $jur['id'], $selectedJurisdictionIds, true))
+                            >
+                            <span>{{ $jur['name'] }} <span class="text-(--muted)">({{ $jur['code'] }})</span></span>
+                        </label>
+                    @endforeach
+                @empty
+                    <p class="mb-0 text-sm text-(--muted)">No active jurisdictions seeded yet. Run JurisdictionSeeder.</p>
+                @endforelse
+                <p class="mb-0 text-sm text-(--muted)" x-show="practiceCountry && visibleJurisdictions().length === 0">
+                    No active jurisdictions for this country yet.
+                </p>
+            </div>
         </div>
 
         <div class="col-md-6">
@@ -112,7 +138,7 @@
         </div>
         <div class="col-md-6">
             <label class="ui-label">Password</label>
-            <input type="password" name="password" class="ui-field" placeholder="{{ $lawyer->exists ? 'Leave blank to keep current' : 'Default: password' }}" minlength="8">
+            <input type="password" name="password" class="ui-field" placeholder="{{ $lawyer->exists ? 'Leave blank to keep current' : 'Default: password' }}" autocomplete="new-password">
         </div>
         <div class="col-md-6">
             <label class="ui-label">Status</label>

@@ -106,7 +106,7 @@
         <x-legal.card>
             <div class="legal-empty">
                 <h3>No jurisdictions assigned</h3>
-                <p>Assign jurisdictions on the lawyer edit form to see relevant case law.</p>
+                <p>Ask an admin to assign practice jurisdictions on edit. Phone dial country does not control case law.</p>
             </div>
         </x-legal.card>
     @else
@@ -149,7 +149,22 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="py-8 text-center text-(--muted)">No cases in the database yet.</td>
+                                <td colspan="8">
+                                    <div class="legal-empty py-8">
+                                        <h3>No cases have been fetched for this jurisdiction yet</h3>
+                                        <p class="mb-0 text-sm text-(--muted)">
+                                            @forelse(($fetchMeta ?? []) as $meta)
+                                                {{ $meta['name'] }}:
+                                                {{ $meta['status'] ?: 'never' }}
+                                                @if($meta['at']) ({{ $meta['at'] }}) @endif
+                                                @if($meta['message']) — {{ $meta['message'] }} @endif
+                                                <br>
+                                            @empty
+                                                Last fetch: not run yet.
+                                            @endforelse
+                                        </p>
+                                    </div>
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>

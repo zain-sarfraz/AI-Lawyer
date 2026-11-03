@@ -2,10 +2,12 @@
 
 namespace App\Domain\CaseLaw;
 
+use App\Jobs\ExtractCaseInsightsJob;
 use App\Models\CaseLawRecord;
 use App\Models\Court;
 use App\Models\Jurisdiction;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CaseLawUpserter
 {
@@ -21,6 +23,12 @@ class CaseLawUpserter
         }
 
         $courtId = $payload['court_id'] ?? null;
+        if (! $courtId && ! empty($payload['external_court_id'])) {
+            $courtId = Court::query()
+                ->where('jurisdiction_id', $jurisdiction->id)
+                ->where('external_court_id', $payload['external_court_id'])
+                ->value('id');
+        }
         if (! $courtId && ! empty($payload['court_name'])) {
             $courtId = Court::query()
                 ->where('jurisdiction_id', $jurisdiction->id)
@@ -76,12 +84,36 @@ class CaseLawUpserter
             ARRAY_FILTER_USE_BOTH
         );
 
-        return CaseLawRecord::query()->updateOrCreate(
+        $record = CaseLawRecord::query()->updateOrCreate(
             [
                 'source' => $source,
                 'external_id' => $externalId,
             ],
             $attributes
         );
+
+        $this->maybeDispatchAi($record);
+
+        return $record->fresh() ?? $record;
+    }
+
+    private function maybeDispatchAi(CaseLawRecord $record): void
+    {
+        if (blank($record->full_text)) {
+            return;
+        }
+        if (in_array($record->ai_status, ['done', 'processing'], true)) {
+            return;
+        }
+
+        try {
+            ExtractCaseInsightsJob::dispatch($record->id)->onQueue('case-law-ai');
+            $record->update(['ai_status' => 'queued']);
+        } catch (\Throwable $e) {
+            Log::warning('case_law.ai_dispatch_failed', [
+                'id' => $record->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -69,7 +69,39 @@ class CaseLawRecord extends Model
 
     public function scopeHideDemo(Builder $query): Builder
     {
-        return $query->where('is_demo', false);
+        return $this->scopeRealOnly($query);
+    }
+
+    /**
+     * Only real fetched judgments may appear in any user-facing UI.
+     */
+    public function scopeRealOnly(Builder $query): Builder
+    {
+        return $query
+            ->where('is_demo', false)
+            ->whereNotNull('source')
+            ->where('source', '!=', '')
+            ->where('source', '!=', 'demo')
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '')
+            ->whereNotNull('judgment_url')
+            ->where(function (Builder $q) {
+                $q->where('judgment_url', 'like', 'http://%')
+                    ->orWhere('judgment_url', 'like', 'https://%');
+            });
+    }
+
+    public function isRealForUi(): bool
+    {
+        if ($this->is_demo || blank($this->source) || $this->source === 'demo') {
+            return false;
+        }
+        if (blank($this->external_id) || blank($this->judgment_url)) {
+            return false;
+        }
+
+        return str_starts_with((string) $this->judgment_url, 'http://')
+            || str_starts_with((string) $this->judgment_url, 'https://');
     }
 
     public function isAiDone(): bool

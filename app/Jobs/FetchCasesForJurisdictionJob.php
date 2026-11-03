@@ -8,15 +8,18 @@ use App\Models\Jurisdiction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 class FetchCasesForJurisdictionJob implements ShouldQueue
 {
     use Queueable;
 
+    /** @param  array<string, mixed>  $options */
     public function __construct(
         public readonly string $jurisdictionCode,
         public readonly int $limit = 25,
+        public readonly array $options = [],
     ) {}
 
     public function handle(CaseSourceRegistry $registry, CaseLawUpserter $upserter): void
@@ -29,27 +32,43 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
         }
 
         $adapter = $registry->forCode($jurisdiction->code);
-        // Honour the explicit command/job limit; config is only the default when limit is omitted.
         $configuredMax = (int) config('case_law.fetch.max_requests_per_run', 25);
         $max = $this->limit > 0 ? $this->limit : $configuredMax;
         $delayMs = (int) config('case_law.fetch.delay_ms', 2500);
         $count = 0;
+        $failed = 0;
+        $skipped = 0;
+
+        $jurisdiction->update([
+            'last_case_fetch_at' => now(),
+            'last_case_fetch_status' => 'running',
+            'last_case_fetch_message' => null,
+        ]);
 
         try {
-            foreach ($adapter->search([
+            foreach ($adapter->search(array_merge([
                 'limit' => $max,
                 'jurisdiction_code' => $jurisdiction->code,
+                // US listing uses search-only mapping (fast). Set enrich=true for full text/AI.
                 'enrich' => false,
-                // UK Atom listings omit counsel; pull from judgment XML when fetching GB-EAW.
                 'enrich_counsel' => str_starts_with(strtoupper($jurisdiction->code), 'GB-'),
-            ]) as $row) {
+            ], $this->options)) as $row) {
                 if ($count >= $max) {
                     break;
                 }
                 try {
+                    $before = \App\Models\CaseLawRecord::query()
+                        ->where('source', $row['source'] ?? '')
+                        ->where('external_id', $row['external_id'] ?? '')
+                        ->exists();
                     $upserter->upsert($jurisdiction, $row);
-                    $count++;
+                    if ($before) {
+                        $skipped++;
+                    } else {
+                        $count++;
+                    }
                 } catch (Throwable $e) {
+                    $failed++;
                     Log::error('case_law.fetch.upsert_failed', [
                         'code' => $jurisdiction->code,
                         'external_id' => $row['external_id'] ?? null,
@@ -57,11 +76,36 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
                     ]);
                 }
 
-                if ($delayMs > 0) {
+                if ($delayMs > 0 && ! str_starts_with(strtoupper($jurisdiction->code), 'US-')) {
                     usleep($delayMs * 1000);
                 }
             }
+
+            $jurisdiction->update([
+                'last_case_fetch_at' => now(),
+                'last_case_fetch_status' => 'ok',
+                'last_case_fetch_message' => "upserted={$count}; skipped={$skipped}; failed={$failed}",
+            ]);
+        } catch (RuntimeException $e) {
+            // Budget / rate-limit stop — keep resume cursor; mark status for UI.
+            $jurisdiction->update([
+                'last_case_fetch_at' => now(),
+                'last_case_fetch_status' => 'paused',
+                'last_case_fetch_message' => $e->getMessage(),
+            ]);
+            Log::warning('case_law.fetch.paused', [
+                'code' => $jurisdiction->code,
+                'error' => $e->getMessage(),
+                'upserted' => $count,
+            ]);
+
+            return;
         } catch (Throwable $e) {
+            $jurisdiction->update([
+                'last_case_fetch_at' => now(),
+                'last_case_fetch_status' => 'failed',
+                'last_case_fetch_message' => $e->getMessage(),
+            ]);
             Log::error('case_law.fetch.adapter_failed', [
                 'code' => $jurisdiction->code,
                 'error' => $e->getMessage(),
@@ -69,6 +113,11 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
             throw $e;
         }
 
-        Log::info('case_law.fetch.completed', ['code' => $jurisdiction->code, 'upserted' => $count]);
+        Log::info('case_law.fetch.completed', [
+            'code' => $jurisdiction->code,
+            'upserted' => $count,
+            'skipped' => $skipped,
+            'failed' => $failed,
+        ]);
     }
 }

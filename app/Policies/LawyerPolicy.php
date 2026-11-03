@@ -53,6 +53,10 @@ class LawyerPolicy extends TenantPolicy
             return false;
         }
 
+        if (! $record->isRealForUi()) {
+            return false;
+        }
+
         $ids = $lawyer->jurisdictions()->pluck('jurisdictions.id')->all();
 
         return in_array((int) $record->jurisdiction_id, array_map('intval', $ids), true);

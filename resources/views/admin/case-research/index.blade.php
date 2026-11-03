@@ -125,11 +125,6 @@
             </div>
 
             <div class="case-index__form-footer">
-                <label class="case-index__check">
-                    <input type="hidden" name="hide_demo" value="0">
-                    <input type="checkbox" name="hide_demo" value="1" class="ui-check-input" onchange="this.form.requestSubmit()" @checked(!empty($filters['hide_demo']))>
-                    Hide demo data
-                </label>
                 <a href="{{ route('case-research.index') }}" class="ui-btn ui-btn-ghost">Reset filters</a>
             </div>
         </form>
@@ -176,9 +171,6 @@
                                         <a href="{{ route('case-research.show', $case) }}" class="case-index__title-link">
                                             {{ $pretty($case->title) }}
                                         </a>
-                                        @if($case->is_demo)
-                                            <span class="case-chip case-chip--demo">Demo</span>
-                                        @endif
                                     </div>
                                     @if($case->jurisdiction?->name)
                                         <div class="case-index__sub">{{ $case->jurisdiction->name }}</div>
@@ -210,8 +202,15 @@
                             <tr>
                                 <td colspan="8">
                                     <div class="case-index__empty">
-                                        <h3>No cases matched</h3>
-                                        <p>Try clearing filters or searching with a different citation / keyword.</p>
+                                        <h3>No cases have been fetched for this jurisdiction yet</h3>
+                                        <p>
+                                            Only real judgments with a public source link are shown — never sample data.
+                                            @if(!empty($fetchMeta))
+                                                @foreach($fetchMeta as $meta)
+                                                    <br>{{ $meta['name'] }}: {{ $meta['status'] ?: 'never' }}@if($meta['at']) ({{ $meta['at'] }})@endif
+                                                @endforeach
+                                            @endif
+                                        </p>
                                         <a href="{{ route('case-research.index') }}" class="ui-btn ui-btn-ghost">Reset filters</a>
                                     </div>
                                 </td>

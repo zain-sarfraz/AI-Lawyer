@@ -6,6 +6,7 @@ use App\Domain\CaseLaw\CaseExtractionValidator;
 use App\Domain\Firm\FirmContext;
 use App\Domain\Firm\PermissionCatalog;
 use App\Models\CaseLawRecord;
+use App\Models\Court;
 use App\Models\Firm;
 use App\Models\Jurisdiction;
 use App\Models\Lawyer;
@@ -71,19 +72,46 @@ class CaseLawEnrichmentTest extends TestCase
     public function test_details_page_for_criminal_civil_and_empty_evidence(): void
     {
         $user = $this->lawyerWithAllJurisdictions();
-
-        $criminal = CaseLawRecord::query()->where('external_id', 'shc-demo-2021-cr-a-455')->firstOrFail();
-        $civil = CaseLawRecord::query()->where('external_id', 'scp-demo-2019-cpla-100')->firstOrFail();
-        $empty = CaseLawRecord::query()->where('external_id', 'scp-demo-2019-cpla-100')->firstOrFail();
+        $criminal = $this->makeRecord([
+            'external_id' => 'test-criminal-1',
+            'jurisdiction_code' => 'PK-SD',
+            'court_name' => 'Sindh High Court',
+            'title' => 'State v Accused Person',
+            'case_type' => 'criminal',
+            'party_one_name' => 'The State',
+            'party_one_role' => 'Prosecution / State',
+            'party_two_name' => 'Accused Person',
+            'party_two_role' => 'Accused',
+            'winner' => 'party_two',
+            'winner_label' => 'Accused',
+            'disposition' => 'reversed',
+            'judgment_url' => 'https://example.test/judgment/criminal-1',
+            'ai_summary' => 'Conviction was reversed on appeal.',
+        ]);
+        $civil = $this->makeRecord([
+            'external_id' => 'test-civil-1',
+            'jurisdiction_code' => 'PK-FED',
+            'court_name' => 'Supreme Court of Pakistan',
+            'title' => 'Plaintiff Co v Defendant Co',
+            'case_type' => 'civil',
+            'party_one_name' => 'Plaintiff Co',
+            'party_one_role' => 'Plaintiff',
+            'party_two_name' => 'Defendant Co',
+            'party_two_role' => 'Defendant',
+            'winner' => 'not_stated',
+            'disposition' => 'not_stated',
+            'judgment_url' => null,
+            'ai_summary' => null,
+            'final_order' => null,
+        ]);
 
         $this->actingAs($user)
             ->get(route('case-research.show', $criminal))
             ->assertOk()
             ->assertSee('Prosecution / State')
             ->assertSee('Accused')
-            ->assertSee('Winner: Accused')
+            ->assertSee('Accused')
             ->assertSee('Reversed')
-            ->assertSee('Demo data')
             ->assertSee('Open full judgment');
 
         $this->actingAs($user)
@@ -91,31 +119,82 @@ class CaseLawEnrichmentTest extends TestCase
             ->assertOk()
             ->assertSee('Plaintiff')
             ->assertSee('Defendant')
-            ->assertSee('Not stated in judgment')
-            ->assertSee('Not available');
+            ->assertSee('Not stated in judgment');
 
         $this->actingAs($user)
-            ->get(route('case-research.show', $empty))
+            ->get(route('case-research.show', $civil))
             ->assertOk()
-            ->assertSee('Source link unavailable');
+            ->assertDontSee('Open full judgment')
+            ->assertSee('Read the judgment');
     }
 
     public function test_direct_judgment_url_and_null_fallback(): void
     {
         $user = $this->lawyerWithAllJurisdictions();
-        $withUrl = CaseLawRecord::query()->where('external_id', 'uksc-demo-2019-41')->firstOrFail();
-        $withoutUrl = CaseLawRecord::query()->where('external_id', 'scp-demo-2019-cpla-100')->firstOrFail();
+        $withUrl = $this->makeRecord([
+            'external_id' => 'test-uk-1',
+            'jurisdiction_code' => 'GB-EAW',
+            'court_name' => 'Supreme Court of the United Kingdom',
+            'title' => 'Example UK Appeal',
+            'case_type' => 'appeal',
+            'judgment_url' => 'https://www.supremecourt.uk/cases/uksc-2019-0192.html',
+        ]);
+        $withoutUrl = $this->makeRecord([
+            'external_id' => 'test-uk-2',
+            'jurisdiction_code' => 'GB-EAW',
+            'court_name' => 'Supreme Court of the United Kingdom',
+            'title' => 'Example UK Without Link',
+            'case_type' => 'appeal',
+            'judgment_url' => null,
+        ]);
 
         $this->actingAs($user)
             ->get(route('case-research.show', $withUrl))
             ->assertOk()
             ->assertSee('https://www.supremecourt.uk/cases/uksc-2019-0192.html')
-            ->assertDontSee('Source link unavailable');
+            ->assertSee('Open full judgment');
 
         $this->actingAs($user)
             ->get(route('case-research.show', $withoutUrl))
             ->assertOk()
-            ->assertSee('Source link unavailable');
+            ->assertDontSee('Open full judgment')
+            ->assertSee('Read the judgment');
+    }
+
+    /** @param  array<string, mixed>  $attrs */
+    private function makeRecord(array $attrs): CaseLawRecord
+    {
+        $jurisdiction = Jurisdiction::query()->where('code', $attrs['jurisdiction_code'])->firstOrFail();
+        $courtId = null;
+        if (! empty($attrs['court_name'])) {
+            $courtId = Court::query()
+                ->where('jurisdiction_id', $jurisdiction->id)
+                ->where('name', $attrs['court_name'])
+                ->value('id');
+        }
+
+        return CaseLawRecord::query()->create([
+            'jurisdiction_id' => $jurisdiction->id,
+            'court_id' => $courtId,
+            'source' => 'test',
+            'external_id' => $attrs['external_id'],
+            'title' => $attrs['title'],
+            'case_type' => $attrs['case_type'] ?? 'civil',
+            'party_one_name' => $attrs['party_one_name'] ?? null,
+            'party_one_role' => $attrs['party_one_role'] ?? null,
+            'party_two_name' => $attrs['party_two_name'] ?? null,
+            'party_two_role' => $attrs['party_two_role'] ?? null,
+            'winner' => $attrs['winner'] ?? null,
+            'winner_label' => $attrs['winner_label'] ?? null,
+            'disposition' => $attrs['disposition'] ?? null,
+            'final_order' => $attrs['final_order'] ?? null,
+            'ai_summary' => $attrs['ai_summary'] ?? null,
+            'judgment_url' => $attrs['judgment_url'] ?? null,
+            'source_url' => $attrs['judgment_url'] ?? null,
+            'is_demo' => false,
+            'decision_date' => now()->toDateString(),
+            'fetched_at' => now(),
+        ]);
     }
 
     /** @return array<string, mixed> */

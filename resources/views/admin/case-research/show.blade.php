@@ -49,9 +49,6 @@
                 @if($record->jurisdiction?->name)
                     <span class="case-chip case-chip--muted">{{ $record->jurisdiction->name }}</span>
                 @endif
-                @if($record->is_demo)
-                    <span class="case-chip case-chip--demo">Demo data</span>
-                @endif
                 @if($record->needsReview())
                     <span class="case-chip case-chip--warn">Needs review</span>
                 @endif

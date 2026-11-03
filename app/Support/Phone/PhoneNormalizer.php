@@ -10,6 +10,7 @@ final class PhoneNormalizer
     private const RULES = [
         'PK' => ['dial' => '+92', 'min' => 10, 'max' => 10],
         'GB' => ['dial' => '+44', 'min' => 10, 'max' => 10],
+        'US' => ['dial' => '+1', 'min' => 10, 'max' => 10],
     ];
 
     public static function dialCode(string $countryCode): string
@@ -21,8 +22,8 @@ final class PhoneNormalizer
 
     /**
      * Normalize a local or partially international number for a selected phone country.
-     * Always strips a single leading 0 from the national significant number before
-     * applying the dial code (fixes 0324… + GB → +44324… bugs).
+     * Always strips leading 0s from the national significant number before
+     * applying the dial code (fixes 0324… + GB → +440324… bugs).
      */
     public static function normalize(string $countryCode, ?string $raw): string
     {
@@ -62,7 +63,12 @@ final class PhoneNormalizer
     public static function split(?string $e164): array
     {
         $value = trim((string) $e164);
-        foreach (self::RULES as $code => $rule) {
+        // Prefer longer dial codes first so +1 does not steal +44 / +92 prefixes incorrectly —
+        // iterate sorted by dial length desc.
+        $rules = self::RULES;
+        uasort($rules, static fn ($a, $b) => strlen($b['dial']) <=> strlen($a['dial']));
+
+        foreach ($rules as $code => $rule) {
             $dial = $rule['dial'];
             if (str_starts_with($value, $dial)) {
                 return [

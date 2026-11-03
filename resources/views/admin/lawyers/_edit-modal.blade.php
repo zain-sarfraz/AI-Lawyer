@@ -9,14 +9,14 @@
     :subtitle="$lawyer->displayName()"
     maxWidth="lg"
 >
-    <form id="{{ $modalName }}-form" method="POST" action="{{ route('lawyers.update', $lawyer) }}">
+    <form id="{{ $modalName }}-form" method="POST" action="{{ route('lawyers.update', $lawyer) }}" data-turbo="false">
         @csrf
         @method('PUT')
         @include('admin.lawyers._fields', [
             'lawyer' => $lawyer,
             'services' => $formServices,
             'selectedServices' => old('_modal') === $modalName ? old('service_ids', $selectedServices) : $selectedServices,
-            'activeJurisdictions' => $activeJurisdictions,
+            'activeJurisdictions' => $activeJurisdictions ?? [],
             'idPrefix' => 'edit_lawyer_'.$lawyer->id,
             'modalName' => $modalName,
         ])
