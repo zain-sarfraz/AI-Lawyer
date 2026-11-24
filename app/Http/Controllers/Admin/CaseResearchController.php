@@ -113,7 +113,7 @@ class CaseResearchController extends Controller implements HasMiddleware
         $cases = $query
             ->orderByDesc('decision_date')
             ->orderByDesc('id')
-            ->paginate(50)
+            ->paginate(10)
             ->withQueryString();
 
         $jurisdictions = Jurisdiction::query()

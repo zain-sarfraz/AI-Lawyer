@@ -44,7 +44,25 @@ class ScheduleController extends Controller implements HasMiddleware
             403,
         );
 
+        $user = auth()->user();
+        if ($user && ($user->hasRole('Lawyer') || $user->isIndividual())) {
+            $existingLawyer = Lawyer::withoutGlobalScopes()->where('user_id', $user->id)->first();
+            if (! $existingLawyer) {
+                Lawyer::withoutGlobalScopes()->create([
+                    'user_id' => $user->id,
+                    'firm_id' => $user->firm_id,
+                    'title' => $user->isIndividual() ? 'Individual Lawyer' : 'Lawyer',
+                    'status' => 'active',
+                    'country' => 'US',
+                    'specialties' => [],
+                ]);
+            }
+        }
+
         $lawyers = Lawyer::query()->with('user')->active()->orderBy('id')->get();
+        if ($lawyers->isEmpty() && $user) {
+            $lawyers = Lawyer::withoutGlobalScopes()->where('user_id', $user->id)->with('user')->get();
+        }
         $services = Service::query()->active()->orderBy('name')->get();
 
         $tones = ['mint', 'blue', 'violet', 'amber', 'rose'];
@@ -119,8 +137,26 @@ class ScheduleController extends Controller implements HasMiddleware
     {
         $this->authorize('create', WorkingHour::class);
 
+        $user = auth()->user();
+        if ($user && ($user->hasRole('Lawyer') || $user->isIndividual())) {
+            $existingLawyer = Lawyer::withoutGlobalScopes()->where('user_id', $user->id)->first();
+            if (! $existingLawyer) {
+                $existingLawyer = Lawyer::withoutGlobalScopes()->create([
+                    'user_id' => $user->id,
+                    'firm_id' => $user->firm_id,
+                    'title' => $user->isIndividual() ? 'Individual Lawyer' : 'Lawyer',
+                    'status' => 'active',
+                    'country' => 'US',
+                    'specialties' => [],
+                ]);
+            }
+        }
+
         $restrictedLawyerId = app(FirmContext::class)->restrictedLawyerId();
         $lawyers = Lawyer::query()->with('user')->active()->orderBy('id')->get();
+        if ($lawyers->isEmpty() && $user) {
+            $lawyers = Lawyer::withoutGlobalScopes()->where('user_id', $user->id)->with('user')->get();
+        }
 
         $selectedId = $restrictedLawyerId
             ?? (int) ($request->integer('lawyer_id') ?: ($lawyers->first()?->id ?? 0));
@@ -136,7 +172,7 @@ class ScheduleController extends Controller implements HasMiddleware
             'lawyers' => $lawyers,
             'lawyer' => $lawyer,
             'week' => $this->availabilityEditor->weekFormState($lawyer),
-            'slotMinutes' => AvailabilityService::SLOT_MINUTES,
+            'slotMinutes' => AvailabilityService::slotMinutesFor(),
             'restricted' => $restrictedLawyerId !== null,
         ]);
     }

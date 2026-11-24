@@ -8,7 +8,6 @@
         method="POST"
         action="{{ route('users.store') }}"
         class="space-y-4"
-        x-data="{ role: @js(old('role', 'Lawyer')) }"
     >
         @csrf
         <input type="hidden" name="_modal" value="create-user">
@@ -23,17 +22,15 @@
                 <input class="ui-field" type="email" name="email" value="{{ old('email') }}" required>
             </div>
             <div class="col-12 col-md-6">
-                <label class="ui-label">Role *</label>
-                <select class="ui-field" name="role" x-model="role" required>
-                    <option value="Lawyer">Lawyer</option>
-                    <option value="Staff">Staff</option>
-                </select>
+                <label class="ui-label">Role</label>
+                <input type="hidden" name="role" value="Lawyer">
+                <input class="ui-field" value="Lawyer" disabled>
             </div>
-            <div class="col-12 col-md-6" x-show="role === 'Lawyer'" x-cloak>
+            <div class="col-12 col-md-6">
                 <label class="ui-label">Title</label>
                 <input class="ui-field" name="title" value="{{ old('title') }}" placeholder="e.g. Associate Counsel">
             </div>
-            <div class="col-12 col-md-6" x-show="role === 'Lawyer'" x-cloak>
+            <div class="col-12 col-md-6">
                 <label class="ui-label">Phone</label>
                 <input class="ui-field" name="phone" value="{{ old('phone') }}">
             </div>

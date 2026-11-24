@@ -11,6 +11,8 @@ final class PhoneNormalizer
         'PK' => ['dial' => '+92', 'min' => 10, 'max' => 10],
         'GB' => ['dial' => '+44', 'min' => 10, 'max' => 10],
         'US' => ['dial' => '+1', 'min' => 10, 'max' => 10],
+        'CA' => ['dial' => '+1', 'min' => 10, 'max' => 10],
+        'AU' => ['dial' => '+61', 'min' => 9, 'max' => 9],
     ];
 
     public static function dialCode(string $countryCode): string

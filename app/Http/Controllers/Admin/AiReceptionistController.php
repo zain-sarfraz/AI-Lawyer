@@ -157,12 +157,16 @@ class AiReceptionistController extends Controller implements HasMiddleware
 
     public function syncFineTuner(): RedirectResponse
     {
+        if ($this->fineTuner->connection() === null) {
+            return back()->withErrors(['sync' => 'Synthflow API key is missing. Please enter your API key in the "Connect Synthflow workspace" section below (or set SYNTHFLOW_API_KEY in .env) to sync live to Synthflow.']);
+        }
+
         $result = $this->fineTuner->syncAgent();
         if (! $result['ok']) {
             return back()->withErrors(['sync' => $result['error'] ?? 'Could not sync Synthflow agent.']);
         }
 
-        $message = 'Services, lawyers, greeting, prompt, and booking tools synced to Synthflow.';
+        $message = 'First message, services, lawyers, prompt, and booking tools synced to Synthflow for this workspace.';
         if (! empty($result['error'])) {
             $message .= ' Warning: '.$result['error'];
         }
@@ -283,12 +287,22 @@ class AiReceptionistController extends Controller implements HasMiddleware
             'ai_system_prompt' => ($prompt === '' || $prompt === trim($defaultPrompt)) ? null : $prompt,
         ]);
 
+        // Ensure First message stays populated in the CRM after save/sync.
+        $firm = $this->firm->current()->fresh();
+        if (! filled($firm->ai_greeting)) {
+            $this->firm->update(['ai_greeting' => $this->receptionist->greetingMessage()]);
+        }
+
         $message = 'AI receptionist settings saved.';
         if ($syncNow && filled($this->fineTuner->settings()['model_id'] ?? null)) {
-            $sync = $this->fineTuner->syncAgent();
-            $message .= $sync['ok']
-                ? ' Synthflow agent synced (services & lawyers included).'
-                : ' Synthflow sync failed: '.($sync['error'] ?? 'unknown error');
+            if ($this->fineTuner->connection() !== null) {
+                $sync = $this->fineTuner->syncAgent();
+                $message .= $sync['ok']
+                    ? ' Synthflow agent synced (first message, services & lawyers).'
+                    : ' Synthflow live sync warning: '.($sync['error'] ?? 'unknown error');
+            } else {
+                $message .= ' Saved locally. To sync live with Synthflow, enter your API key below and connect.';
+            }
         }
 
         return back()->with('success', $message);

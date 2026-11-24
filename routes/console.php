@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('appointments:send-reminders')->everyFiveMinutes();
+Schedule::command('users:prune-unpaid')->daily();
 
 // Disabled by default — enable with CASE_LAW_FETCH_SCHEDULE_ENABLED=true
 if (config('case_law.fetch.enabled')) {
@@ -13,6 +14,7 @@ if (config('case_law.fetch.enabled')) {
     Schedule::command('cases:fetch GB-EAW --limit=25')->dailyAt('02:45');
     Schedule::command('cases:fetch CA-FED --limit=25')->dailyAt('03:00');
     Schedule::command('cases:fetch CA-ON --limit=25')->dailyAt('03:15');
+    Schedule::command('cases:fetch AU-FED --all --sync')->dailyAt('03:20');
     Schedule::command('cases:fetch US-FED --court=scotus --limit=25 --sync')->dailyAt('03:30');
 }
 

@@ -75,6 +75,11 @@ class Lawyer extends Model
         return $this->hasMany(Appointment::class)->latest('id');
     }
 
+    public function legalCases(): HasMany
+    {
+        return $this->hasMany(LegalCase::class);
+    }
+
     public function displayName(): string
     {
         return $this->user?->name ?? ('Lawyer #'.$this->id);

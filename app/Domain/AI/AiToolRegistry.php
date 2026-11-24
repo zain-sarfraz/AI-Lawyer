@@ -227,8 +227,8 @@ class AiToolRegistry
                 'title' => $l->title,
                 'specialties' => $l->specialties ?? [],
                 'weekly_hours' => $hours,
-                'slot_minutes' => AvailabilityService::SLOT_MINUTES,
-                'speak' => $l->displayName().' is usually available: '.$speakHours.'. Appointments are '.AvailabilityService::SLOT_MINUTES.' minutes.',
+                'slot_minutes' => AvailabilityService::slotMinutesFor(),
+                'speak' => $l->displayName().' is usually available: '.$speakHours.'. Appointments are '.AvailabilityService::slotMinutesFor().' minutes.',
             ];
         })->all();
     }
@@ -262,7 +262,7 @@ class AiToolRegistry
                 'days' => [],
                 'lawyer_id' => $lawyer->id,
                 'lawyer_name' => $lawyer->displayName(),
-                'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+                'slot_minutes' => AvailabilityService::slotMinutesFor(),
                 'message' => $lawyer->displayName().' has no free slots left this week. Offer next week or another lawyer.',
             ];
         }
@@ -276,7 +276,7 @@ class AiToolRegistry
             'days' => array_values($days),
             'lawyer_id' => $lawyer->id,
             'lawyer_name' => $lawyer->displayName(),
-            'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+            'slot_minutes' => AvailabilityService::slotMinutesFor(),
             'count' => count($days),
             'menu' => $speak,
             'speak' => $speak,
@@ -312,7 +312,7 @@ class AiToolRegistry
                 'windows' => [],
                 'message' => 'No availability on '.$date->toDateString().'. Call list_available_days and offer another day.',
                 'date'    => $date->toDateString(),
-                'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+                'slot_minutes' => AvailabilityService::slotMinutesFor(),
                 'speak' => 'That day is fully booked. Which other day works for you?',
             ];
         }
@@ -326,7 +326,7 @@ class AiToolRegistry
         $speak = 'On '.$date->format('l, M j').', '
             .($lawyer?->displayName() ?: 'the lawyer')
             .' is available from '.$windowSpeak
-            .'. Consultations are '.AvailabilityService::SLOT_MINUTES
+            .'. Consultations are '.AvailabilityService::slotMinutesFor()
             .' minutes. What time would you like?';
 
         return [
@@ -338,7 +338,7 @@ class AiToolRegistry
             'all_slot_count' => count($slots),
             'date' => $date->toDateString(),
             'count' => count($slots),
-            'slot_minutes' => AvailabilityService::SLOT_MINUTES,
+            'slot_minutes' => AvailabilityService::slotMinutesFor(),
             'menu' => $speak,
             'speak' => $speak,
             'next_step' => 'Ask the caller to choose any time within the availability window. Map their time to the nearest matching slots[].start_at, then book. Never list individual slot options aloud.',
@@ -382,14 +382,16 @@ class AiToolRegistry
         $windowStart = $slots[0];
         $prev = $slots[0];
 
+        $slotMinutes = AvailabilityService::slotMinutesFor();
+
         for ($i = 1, $n = count($slots); $i < $n; $i++) {
             $slot = $slots[$i];
             $prevStartLocal = Carbon::parse((string) ($prev['start_local'] ?? $prev['start_at']), $tz);
             $slotStartLocal = Carbon::parse((string) ($slot['start_local'] ?? $slot['start_at']), $tz);
 
-            // Contiguous 30-min starts stay in one window; a larger gap opens a new window.
-            if ($slotStartLocal->gt($prevStartLocal->copy()->addMinutes(AvailabilityService::SLOT_MINUTES))) {
-                $endLocal = $prevStartLocal->copy()->addMinutes(AvailabilityService::SLOT_MINUTES);
+            // Contiguous firm-slot starts stay in one window; a larger gap opens a new window.
+            if ($slotStartLocal->gt($prevStartLocal->copy()->addMinutes($slotMinutes))) {
+                $endLocal = $prevStartLocal->copy()->addMinutes($slotMinutes);
                 $windows[] = [
                     'start_at' => (string) ($windowStart['start_at'] ?? ''),
                     'end_at' => (string) ($prev['end_at'] ?? $endLocal->copy()->utc()->toIso8601String()),
@@ -402,7 +404,7 @@ class AiToolRegistry
         }
 
         $prevStartLocal = Carbon::parse((string) ($prev['start_local'] ?? $prev['start_at']), $tz);
-        $endLocal = $prevStartLocal->copy()->addMinutes(AvailabilityService::SLOT_MINUTES);
+        $endLocal = $prevStartLocal->copy()->addMinutes($slotMinutes);
         $windows[] = [
             'start_at' => (string) ($windowStart['start_at'] ?? ''),
             'end_at' => (string) ($prev['end_at'] ?? $endLocal->copy()->utc()->toIso8601String()),

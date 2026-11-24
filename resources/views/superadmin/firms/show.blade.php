@@ -13,7 +13,6 @@
         ->implode('');
     $initials = $initials !== '' ? strtoupper($initials) : 'F';
     $adminCount = $admins->count();
-    $ownerCount = $admins->filter(fn ($u) => $u->hasAnyRole(['Owner', 'Admin']))->count();
     $lawyerCount = $admins->filter(fn ($u) => $u->hasRole('Lawyer'))->count();
 @endphp
 
@@ -90,10 +89,6 @@
             <strong>{{ $adminCount }}</strong>
         </div>
         <div class="sa-firm-stat">
-            <span class="sa-firm-stat-label">Admins</span>
-            <strong>{{ $ownerCount }}</strong>
-        </div>
-        <div class="sa-firm-stat">
             <span class="sa-firm-stat-label">Lawyers</span>
             <strong>{{ $lawyerCount }}</strong>
         </div>
@@ -154,39 +149,25 @@
             <section class="sa-firm-panel">
                 <div class="sa-firm-panel-head sa-firm-panel-head-row">
                     <div>
-                        <h2>People on this firm</h2>
+                        <h2>Lawyers on this firm</h2>
                         <p>{{ $adminCount }} user{{ $adminCount === 1 ? '' : 's' }} in this workspace.</p>
                     </div>
-                    <button
-                        type="button"
+                    <a
+                        href="{{ route('superadmin.lawyers.index', ['open' => 'create-lawyer', 'firm_id' => $firm->id]) }}"
                         class="ui-btn ui-btn-brass btn-sm"
-                        @click="
-                            const el = document.getElementById('add-admin-firm-id');
-                            if (el) el.value = '{{ $firm->id }}';
-                            $dispatch('open-modal', 'add-admin');
-                        "
-                    >Add admin</button>
+                    >Add lawyer</a>
                 </div>
 
                 <div class="sa-firm-people">
                     @forelse($admins as $admin)
                         @php
-                            $role = $admin->getRoleNames()->first() ?: 'Admin';
-                            $rolesLabel = $admin->getRoleNames()->join(', ') ?: '—';
-                            $userStatus = $admin->status?->value ?? (string) $admin->status ?: 'active';
-                            $isFirmAdmin = $admin->hasAnyRole(['Owner', 'Admin']);
+                            $rolesLabel = $admin->getRoleNames()->join(', ') ?: 'Lawyer';
                             $userInitials = collect(preg_split('/\s+/', trim((string) $admin->name)) ?: [])
                                 ->filter()
                                 ->map(fn ($p) => mb_substr($p, 0, 1))
                                 ->take(2)
                                 ->implode('');
                             $userInitials = $userInitials !== '' ? strtoupper($userInitials) : '?';
-                            $roleTone = match (true) {
-                                $admin->hasRole('Owner') => 'owner',
-                                $admin->hasRole('Admin') => 'admin',
-                                $admin->hasRole('Lawyer') => 'lawyer',
-                                default => 'other',
-                            };
                         @endphp
                         <article class="sa-firm-person">
                             <div class="sa-firm-person-main">
@@ -197,51 +178,13 @@
                                 </div>
                             </div>
                             <div class="sa-firm-person-meta">
-                                <span class="sa-role-pill is-{{ $roleTone }}">{{ $rolesLabel }}</span>
-                                @if($isFirmAdmin)
-                                    <div class="sa-firm-person-actions">
-                                        <button
-                                            type="button"
-                                            class="table-icon-btn is-edit"
-                                            title="Edit admin"
-                                            aria-label="Edit admin"
-                                            @click="
-                                                $dispatch('fill-edit-admin', {
-                                                    action: @js(route('superadmin.admins.update', $admin->id)),
-                                                    firm_id: @js($admin->firm_id),
-                                                    admin_name: @js($admin->name),
-                                                    admin_email: @js($admin->email),
-                                                    admin_role: @js($role),
-                                                    status: @js($userStatus),
-                                                });
-                                                $dispatch('open-modal', 'edit-admin');
-                                            "
-                                        >
-                                            <x-ui.icon name="pencil" class="h-4 w-4" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="table-icon-btn is-delete"
-                                            title="Delete admin"
-                                            aria-label="Delete admin"
-                                            @click="
-                                                $dispatch('fill-delete-admin', {
-                                                    action: @js(route('superadmin.admins.destroy', $admin->id)),
-                                                    name: @js($admin->name),
-                                                });
-                                                $dispatch('open-modal', 'delete-admin');
-                                            "
-                                        >
-                                            <x-ui.icon name="trash" class="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                @endif
+                                <span class="sa-role-pill is-lawyer">{{ $rolesLabel }}</span>
                             </div>
                         </article>
                     @empty
                         <div class="sa-firm-empty">
-                            <strong>No users yet</strong>
-                            <p>Add an admin to let this firm sign in to their workspace.</p>
+                            <strong>No lawyers yet</strong>
+                            <p>Add a lawyer from the Lawyers page so this firm can sign in.</p>
                         </div>
                     @endforelse
                 </div>

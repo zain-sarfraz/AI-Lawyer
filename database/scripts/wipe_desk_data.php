@@ -41,7 +41,7 @@ DB::transaction(function () {
     if ($lawyerUserIds !== []) {
         User::query()
             ->whereIn('id', $lawyerUserIds)
-            ->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', ['Owner', 'Admin']))
+            ->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', ['Lawyer', 'Superadmin']))
             ->delete();
     }
 

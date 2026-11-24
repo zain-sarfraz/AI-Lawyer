@@ -1,9 +1,7 @@
 @php
     $idPrefix = $idPrefix ?? 'case';
     $case = $case ?? null;
-    $restrictedLawyer = auth()->user()
-        && auth()->user()->hasRole('Lawyer')
-        && ! auth()->user()->hasAnyRole(['Owner', 'Admin']);
+    $restrictedLawyer = auth()->user()?->hasRole('Lawyer') ?? false;
     $ownLawyerId = $restrictedLawyer
         ? \App\Models\Lawyer::query()->withoutGlobalScopes()->where('user_id', auth()->id())->value('id')
         : null;

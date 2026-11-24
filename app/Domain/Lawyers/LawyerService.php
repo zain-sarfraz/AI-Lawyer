@@ -3,10 +3,13 @@
 namespace App\Domain\Lawyers;
 
 use App\Domain\Audit\AuditLogService;
+use App\Domain\Firm\FirmContext;
+use App\Models\Firm;
 use App\Models\Lawyer;
 use App\Models\User;
 use App\Models\WorkingHour;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class LawyerService
 {
@@ -15,11 +18,13 @@ class LawyerService
     public function create(array $data, ?array $userData = null, array $serviceIds = [], array $jurisdictionIds = []): Lawyer
     {
         return DB::transaction(function () use ($data, $userData, $serviceIds, $jurisdictionIds) {
+            $this->assertWithinPlanLawyerLimit(isset($data['firm_id']) ? (int) $data['firm_id'] : null);
+
             if ($userData) {
                 $user = User::query()->create([
                     'name' => $userData['name'],
                     'email' => $userData['email'],
-                    'password' => $userData['password'] ?? 'password',
+                    'password' => !empty($userData['password']) ? $userData['password'] : '11223344',
                     'status' => 'active',
                     'email_verified_at' => now(),
                 ]);
@@ -80,5 +85,24 @@ class LawyerService
 
             return 'Lawyer deleted.';
         });
+    }
+
+    private function assertWithinPlanLawyerLimit(?int $firmId = null): void
+    {
+        $firmId ??= app(FirmContext::class)->id();
+        if ($firmId === null) {
+            return;
+        }
+
+        $firm = Firm::query()->find($firmId);
+        if (! $firm || $firm->canAddLawyer()) {
+            return;
+        }
+
+        $max = $firm->resolvedMaxLawyers() ?? 1;
+
+        throw ValidationException::withMessages([
+            'plan' => "Your {$firm->plan} (individual) plan allows only {$max} lawyer. Upgrade to Growth for a multi-lawyer firm workspace.",
+        ]);
     }
 }

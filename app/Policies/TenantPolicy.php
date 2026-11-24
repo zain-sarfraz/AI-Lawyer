@@ -64,7 +64,7 @@ abstract class TenantPolicy
 
     protected function restrictedLawyerId(User $user): ?int
     {
-        if (! $user->hasRole('Lawyer') || $user->hasAnyRole(['Owner', 'Admin'])) {
+        if ($user->isFirmAdmin() || ! $user->hasRole('Lawyer')) {
             return null;
         }
 

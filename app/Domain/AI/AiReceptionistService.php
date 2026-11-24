@@ -40,6 +40,16 @@ class AiReceptionistService
         $escalation = trim((string) ($firm->ai_escalation_rules ?: 'Offer a human handoff when the caller asks, or when you cannot answer from approved tools.'));
         $afterHours = $firm->after_hours_behavior ?: 'callback';
         $topics = trim((string) ($firm->ai_allowed_topics ?: 'Firm services, fees, lawyers, and booking consultations.'));
+        $timezone = $firm->resolvedTimezone();
+        $currency = $firm->currency ?: 'USD';
+        $slotMinutes = max(5, (int) ($firm->slot_interval_minutes ?: $firm->default_duration_minutes ?: 30));
+        $horizonDays = max(1, (int) ($firm->booking_horizon_days ?: 14));
+        $transfer = trim((string) ($firm->transfer_number ?: $firm->phone ?: 'n/a'));
+        $phone = trim((string) ($firm->phone ?: 'n/a'));
+        $email = trim((string) ($firm->email ?: 'n/a'));
+        $website = trim((string) ($firm->website ?: 'n/a'));
+        $address = trim((string) ($firm->address ?: 'n/a'));
+        $recording = $firm->recording_enabled ? 'enabled' : 'disabled';
 
         return <<<PROMPT
 You are {$name}, the virtual receptionist for {$firmName}.
@@ -47,6 +57,19 @@ You are not a lawyer and must not provide legal advice.
 Only use firm-approved information and tool results.
 Never invent service prices, availability, policies, lawyer details or office information.
 If information is unavailable, say that you do not have the approved information and offer a human handoff.
+
+Firm profile (approved):
+- Legal / display name: {$firmName}
+- Phone: {$phone}
+- Email: {$email}
+- Website: {$website}
+- Address: {$address}
+- Timezone: {$timezone}
+- Currency for fees: {$currency}
+- Transfer / handoff number: {$transfer}
+- Call recording: {$recording}
+- Consultation slot length: {$slotMinutes} minutes
+- Booking horizon: next {$horizonDays} day(s)
 
 Listening rules (critical — phone audio is often unclear):
 - NEVER use numbered options (no "Option 1 / Option 2"). Speak natural names and times only.
@@ -61,22 +84,22 @@ Call flow (follow this order unless the caller already knows what they need):
 1. Greet the caller using this greeting (or a natural short version of it): {$greeting}
 2. Briefly explain that you can help with services and booking.
 3. When booking: Call get_services. Read "speak"/"menu" (service names only, no prices yet). Wait for the caller to name a service.
-4. After a clear service: Call get_service_details with that service_id. Tell fee + duration. Confirm the lawyer.
+4. After a clear service: Call get_service_details with that service_id. Tell fee + duration (use {$currency} when quoting). Confirm the lawyer.
 5. Booking flow — ALWAYS follow this order:
    a. Collect full name and phone once; repeat them back to confirm. Never re-ask after confirmed.
    b. Call list_available_days. Read "speak" (day names only). Ask which day they want.
-   c. After the day: call find_available_slots. Read "speak" — tell ONLY the availability window (start time to end time). Do NOT list every 30-minute slot.
-   d. Let the caller choose any time inside that window. Map it to the matching slots[].start_at (nearest 30-minute start), then call book_legal_consultation ONCE with name and phone.
+   c. After the day: call find_available_slots. Read "speak" — tell ONLY the availability window (start time to end time). Do NOT list every {$slotMinutes}-minute slot.
+   d. Let the caller choose any time inside that window. Map it to the matching slots[].start_at (nearest {$slotMinutes}-minute start), then call book_legal_consultation ONCE with name and phone.
    e. ONE BOOKING ONLY per call. If booking already succeeded, never book again; offer reschedule for changes.
    FORBIDDEN: Never say "Option 1/2/3". Never read a long list of slot times. Never invent availability outside the tool windows.
 6. NO VERIFICATION CODE — CRITICAL RULE:
    - Once book_legal_consultation returns success, the appointment is IMMEDIATELY and FULLY confirmed.
    - NEVER ask the caller for any 6-digit code, verification code, confirmation code, SMS code, or OTP.
    - Say: "Your consultation has been booked and confirmed for [Date] at [Time] with [Lawyer Name]. We look forward to speaking with you!"
-7. Availability rules: Consultations are 30 minutes. Tell the caller the open window (start–end) for the chosen day and let them pick the time. Use list_available_days and find_available_slots. Never invent open days or times.
+7. Availability rules: Consultations are {$slotMinutes} minutes in {$timezone}. Tell the caller the open window (start–end) for the chosen day and let them pick the time. Use list_available_days and find_available_slots. Never invent open days or times.
 8. Never claim a slot is booked until book_legal_consultation returns success.
 9. If booking fails because the slot was taken, apologize and call find_available_slots again (or offer another day).
-10. If the customer asks for a human, follow the firm's transfer policy.
+10. If the customer asks for a human, follow the firm's transfer policy (transfer number: {$transfer}).
 
 Escalation rules: {$escalation}
 After-hours behavior: {$afterHours}
@@ -109,6 +132,13 @@ PROMPT;
 
         return [
             'firm_name' => $firm->firm_name,
+            'legal_name' => $firm->legal_name,
+            'phone' => $firm->phone,
+            'email' => $firm->email,
+            'website' => $firm->website,
+            'address' => $firm->address,
+            'timezone' => $firm->resolvedTimezone(),
+            'currency' => $firm->currency,
             'receptionist_name' => $firm->receptionist_name,
             'greeting' => $this->greetingMessage(),
             'tone' => $firm->ai_tone,
@@ -117,6 +147,9 @@ PROMPT;
             'after_hours_behavior' => $firm->after_hours_behavior,
             'transfer_number_configured' => (bool) $firm->transfer_number,
             'recording_enabled' => (bool) $firm->recording_enabled,
+            'slot_interval_minutes' => (int) ($firm->slot_interval_minutes ?: 30),
+            'default_duration_minutes' => (int) ($firm->default_duration_minutes ?: 30),
+            'booking_horizon_days' => (int) ($firm->booking_horizon_days ?: 14),
             'custom_prompt' => filled($firm->ai_system_prompt),
         ];
     }
@@ -132,15 +165,27 @@ PROMPT;
 
         $firmName = $firm->legal_name ?: ($firm->firm_name === '123' ? 'Qubetech Legal' : $firm->firm_name);
         $now = $this->clock->now($firm);
+        $slotMinutes = max(5, (int) ($firm->slot_interval_minutes ?: $firm->default_duration_minutes ?: 30));
+        $currency = $firm->currency ?: 'USD';
         $lines = [
             '# '.$firmName.' — Services, Fees, and Lawyers',
             '',
             'Firm phone: '.($firm->phone ?: 'n/a'),
+            'Firm email: '.($firm->email ?: 'n/a'),
+            'Website: '.($firm->website ?: 'n/a'),
+            'Address: '.($firm->address ?: 'n/a'),
             'Transfer number: '.($firm->transfer_number ?: 'n/a'),
             'Timezone: '.$firm->resolvedTimezone(),
+            'Currency: '.$currency,
+            'Consultation length: '.$slotMinutes.' minutes',
+            'Buffer after appointments: '.(int) ($firm->buffer_minutes ?: 0).' minutes',
+            'Booking horizon: '.(int) ($firm->booking_horizon_days ?: 14).' days',
+            'Cancellation window: '.(int) ($firm->cancellation_window_hours ?: 0).' hours',
+            'After-hours behavior: '.($firm->after_hours_behavior ?: 'callback'),
+            'Call recording: '.($firm->recording_enabled ? 'enabled' : 'disabled'),
             'Current local date & time: '.$now->format('l, F j, Y g:i A').' ('.$firm->resolvedTimezone().')',
             'Today\'s date for bookings: '.$now->format('Y-m-d'),
-            'Currently accepting bookings: yes (lawyer weekly hours; tell availability start–end window; caller picks time; 30-minute consultations)',
+            'Currently accepting bookings: yes (lawyer weekly hours; tell availability start–end window; caller picks time; '.$slotMinutes.'-minute consultations)',
             '',
             '## Active services',
         ];

@@ -1,7 +1,7 @@
 <x-ui.modal
     name="create-firm"
     title="Create firm"
-    subtitle="New isolated workspace. Add admins separately from the Admins page."
+    subtitle="New isolated workspace. Add lawyers from the Lawyers page."
     maxWidth="xl"
 >
     <form method="POST" action="{{ route('superadmin.firms.store') }}" class="space-y-4">

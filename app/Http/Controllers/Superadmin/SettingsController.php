@@ -22,7 +22,7 @@ class SettingsController extends Controller
                 'admins' => User::query()
                     ->withoutGlobalScopes()
                     ->whereNotNull('firm_id')
-                    ->whereHas('roles', fn ($q) => $q->whereIn('name', ['Owner', 'Admin']))
+                    ->whereHas('roles', fn ($q) => $q->where('name', 'Lawyer'))
                     ->count(),
             ],
             'appName' => config('app.name'),

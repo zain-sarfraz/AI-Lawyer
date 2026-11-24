@@ -15,54 +15,47 @@ class FirmUserService
     public function __construct(private readonly LawyerService $lawyers) {}
 
     /**
-     * @param  array{name: string, email: string, password: string, role: string, phone?: ?string, title?: ?string}  $data
+     * @param  array{
+     *     name: string,
+     *     email: string,
+     *     password: string,
+     *     role?: string,
+     *     phone?: ?string,
+     *     country?: ?string,
+     *     title?: ?string,
+     *     jurisdiction_ids?: list<int>
+     * }  $data
      */
     public function create(array $data): User
     {
         $email = strtolower(trim($data['email']));
-        $role = $data['role'];
+        $firmId = app(\App\Domain\Firm\FirmContext::class)->id();
 
-        if (! in_array($role, ['Lawyer', 'Staff'], true)) {
+        if (User::emailTakenInFirm($email, $firmId)) {
             throw ValidationException::withMessages([
-                'role' => 'Role must be Lawyer or Staff.',
+                'email' => 'This email is already used in this firm.',
             ]);
         }
 
-        if (User::query()->withoutGlobalScopes()->where('email', $email)->exists()) {
-            throw ValidationException::withMessages([
-                'email' => 'This email is already registered.',
-            ]);
-        }
+        return DB::transaction(function () use ($data, $email) {
+            $lawyer = $this->lawyers->create(
+                [
+                    'title' => $data['title'] ?? null,
+                    'phone' => $data['phone'] ?? null,
+                    'country' => $data['country'] ?? null,
+                    'status' => 'active',
+                    'specialties' => [],
+                ],
+                [
+                    'name' => $data['name'],
+                    'email' => $email,
+                    'password' => $data['password'],
+                ],
+                [],
+                $data['jurisdiction_ids'] ?? [],
+            );
 
-        return DB::transaction(function () use ($data, $email, $role) {
-            if ($role === 'Lawyer') {
-                $lawyer = $this->lawyers->create(
-                    [
-                        'title' => $data['title'] ?? null,
-                        'phone' => $data['phone'] ?? null,
-                        'status' => 'active',
-                        'specialties' => [],
-                    ],
-                    [
-                        'name' => $data['name'],
-                        'email' => $email,
-                        'password' => $data['password'],
-                    ],
-                );
-
-                return $lawyer->user->fresh(['roles', 'lawyer']);
-            }
-
-            $user = User::query()->create([
-                'name' => $data['name'],
-                'email' => $email,
-                'password' => $data['password'],
-                'status' => UserStatus::Active,
-                'email_verified_at' => now(),
-            ]);
-            $user->syncRoles(['Staff']);
-
-            return $user->fresh(['roles', 'lawyer']);
+            return $lawyer->user->fresh(['roles', 'lawyer.jurisdictions']);
         });
     }
 
@@ -74,9 +67,9 @@ class FirmUserService
             ]);
         }
 
-        if ($user->isAdmin() || $user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
             throw ValidationException::withMessages([
-                'status' => 'Cannot change status for Owner/Admin accounts here.',
+                'status' => 'Cannot change status for Superadmin accounts here.',
             ]);
         }
 
@@ -93,32 +86,35 @@ class FirmUserService
     }
 
     /**
-     * @param  array{name: string, email: string, role: string, password?: ?string, phone?: ?string, title?: ?string, status?: ?string}  $data
+     * @param  array{
+     *     name: string,
+     *     email: string,
+     *     role?: string,
+     *     password?: ?string,
+     *     phone?: ?string,
+     *     country?: ?string,
+     *     title?: ?string,
+     *     status?: ?string,
+     *     jurisdiction_ids?: list<int>
+     * }  $data
      */
     public function update(User $user, array $data): User
     {
         $email = strtolower(trim($data['email']));
-        $role = $data['role'];
 
-        if (! in_array($role, ['Lawyer', 'Staff'], true)) {
+        if (User::emailTakenInFirm($email, $user->firm_id !== null ? (int) $user->firm_id : null, (int) $user->id)) {
             throw ValidationException::withMessages([
-                'role' => 'Role must be Lawyer or Staff.',
+                'email' => 'This email is already used in this firm.',
             ]);
         }
 
-        if (User::query()->withoutGlobalScopes()->where('email', $email)->where('id', '!=', $user->id)->exists()) {
+        if ($user->isSuperAdmin()) {
             throw ValidationException::withMessages([
-                'email' => 'This email is already registered.',
+                'role' => 'Cannot modify Superadmin accounts here.',
             ]);
         }
 
-        if ($user->isAdmin() || $user->isSuperAdmin()) {
-            throw ValidationException::withMessages([
-                'role' => 'Cannot modify Owner/Admin accounts here.',
-            ]);
-        }
-
-        return DB::transaction(function () use ($user, $data, $email, $role) {
+        return DB::transaction(function () use ($user, $data, $email) {
             $user->name = $data['name'];
             $user->email = $email;
             if (! empty($data['password'])) {
@@ -128,41 +124,54 @@ class FirmUserService
                 $user->status = UserStatus::from($data['status']);
             }
             $user->save();
-            $user->syncRoles([$role]);
 
-            if ($role === 'Lawyer') {
-                $lawyer = $user->lawyer;
-                if ($lawyer) {
-                    $lawyer->update([
-                        'title' => $data['title'] ?? $lawyer->title,
-                        'phone' => $data['phone'] ?? $lawyer->phone,
-                        'status' => ($user->status?->value === 'active') ? 'active' : 'inactive',
-                    ]);
-                } else {
-                    $this->lawyers->create(
-                        [
-                            'title' => $data['title'] ?? null,
-                            'phone' => $data['phone'] ?? null,
-                            'status' => ($user->status?->value === 'active') ? 'active' : 'inactive',
-                            'specialties' => [],
-                            'user_id' => $user->id,
-                        ]
-                    );
-                }
-            } elseif ($role === 'Staff' && $user->lawyer) {
-                $user->lawyer->services()->detach();
-                $user->lawyer->delete();
+            // Preserve FirmAdmin owners; members stay Lawyer.
+            if (! $user->isFirmAdmin()) {
+                $user->syncRoles(['Lawyer']);
             }
 
-            return $user->fresh(['roles', 'lawyer']);
+            $jurisdictionIds = array_key_exists('jurisdiction_ids', $data)
+                ? array_values(array_map('intval', $data['jurisdiction_ids'] ?? []))
+                : null;
+
+            $lawyer = $user->lawyer;
+            if ($lawyer) {
+                $this->lawyers->update(
+                    $lawyer,
+                    [
+                        'title' => $data['title'] ?? $lawyer->title,
+                        'phone' => array_key_exists('phone', $data) ? $data['phone'] : $lawyer->phone,
+                        'country' => array_key_exists('country', $data) ? $data['country'] : $lawyer->country,
+                        'status' => ($user->status?->value === 'active') ? 'active' : 'inactive',
+                    ],
+                    null,
+                    $jurisdictionIds,
+                );
+            } else {
+                $this->lawyers->create(
+                    [
+                        'title' => $data['title'] ?? null,
+                        'phone' => $data['phone'] ?? null,
+                        'country' => $data['country'] ?? null,
+                        'status' => ($user->status?->value === 'active') ? 'active' : 'inactive',
+                        'specialties' => [],
+                        'user_id' => $user->id,
+                    ],
+                    null,
+                    [],
+                    $jurisdictionIds ?? [],
+                );
+            }
+
+            return $user->fresh(['roles', 'lawyer.jurisdictions']);
         });
     }
 
     public function delete(User $user): void
     {
-        if ($user->isAdmin() || $user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
             throw ValidationException::withMessages([
-                'user' => 'Cannot delete Owner or Admin accounts.',
+                'user' => 'Cannot delete Superadmin accounts.',
             ]);
         }
 

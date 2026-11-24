@@ -60,7 +60,7 @@ class BookAppointment
         }
 
         $firm = $this->firmService->current();
-        $duration = AvailabilityService::SLOT_MINUTES;
+        $duration = AvailabilityService::slotMinutesFor($firm);
         $startUtc = $this->clock->toUtc($payload['start_at'], $firm);
         $endUtc = $startUtc->copy()->addMinutes($duration);
         $bookable = $type ?? $service;

@@ -16,6 +16,13 @@ class FirmScope implements Scope
         $firmId = app(FirmContext::class)->id();
 
         if ($firmId === null) {
+            $user = auth()->user();
+            if ($user && ($user->account_type === 'individual' || $user->role === 'individual_lawyer') && $user->firm_id === null) {
+                $builder->whereNull($model->getTable().'.firm_id');
+
+                return;
+            }
+
             $builder->whereRaw('1 = 0');
 
             return;

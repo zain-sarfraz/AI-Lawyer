@@ -40,5 +40,45 @@ class DatabaseSeeder extends Seeder
 
         $superadmin = User::query()->withoutGlobalScopes()->findOrFail($userId);
         $superadmin->syncRoles(['Superadmin']);
+
+        // Individual Lawyer demo user
+        $lawyerUser = User::query()->withoutGlobalScopes()->firstOrCreate(
+            ['email' => 'lawyer@example.com'],
+            [
+                'name' => 'Individual Lawyer',
+                'password' => Hash::make('11223344'),
+                'account_type' => 'individual',
+                'role' => 'individual_lawyer',
+                'status' => UserStatus::Active->value,
+                'firm_id' => null,
+                'email_verified_at' => now(),
+            ]
+        );
+        $lawyerUser->syncRoles(['Lawyer']);
+
+        // Law Firm demo
+        $firm = \App\Models\Firm::query()->firstOrCreate(
+            ['slug' => 'apex-legal'],
+            [
+                'name' => 'Apex Legal Partners',
+                'account_type' => 'firm',
+                'subscription_status' => 'active',
+            ]
+        );
+
+        $firmAdmin = User::query()->withoutGlobalScopes()->firstOrCreate(
+            ['email' => 'firm@example.com'],
+            [
+                'name' => 'Firm Administrator',
+                'password' => Hash::make('11223344'),
+                'account_type' => 'firm',
+                'role' => 'firm_admin',
+                'status' => UserStatus::Active->value,
+                'firm_id' => $firm->id,
+                'email_verified_at' => now(),
+            ]
+        );
+        $firmAdmin->syncRoles(['FirmAdmin']);
+        $firm->update(['owner_id' => $firmAdmin->id]);
     }
 }

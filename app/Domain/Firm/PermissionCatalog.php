@@ -19,12 +19,13 @@ class PermissionCatalog
             // Platform (Superadmin only — never grants firm CRM access)
             'platform.dashboard.view' => 'View platform dashboard',
             'platform.firms.manage' => 'Manage firms',
-            'platform.admins.manage' => 'Create and manage firm admins',
+            'platform.lawyers.manage' => 'Manage lawyers across firms',
 
             // Firm CRM
             'firm.settings.manage' => 'Manage firm settings',
             'users.manage' => 'Manage users',
             'lawyers.manage' => 'Manage lawyers',
+            'invitations.manage' => 'Manage lawyer invitations',
             'services.manage' => 'Manage services',
             'schedules.manage' => 'Manage schedules',
             'leads.view' => 'View leads',
@@ -44,54 +45,36 @@ class PermissionCatalog
             'audit.view' => 'View audit logs',
             'reports.view' => 'View reports',
             'knowledge.manage' => 'Manage knowledge base',
+            'billing.view' => 'View subscription & billing',
         ];
     }
 
     /**
+     * Roles: Superadmin (platform), FirmAdmin (firm owner), Lawyer (individual / firm member).
+     *
      * @return array<string, list<string>>
      */
     public static function matrix(): array
     {
-        $firmPermissions = array_values(array_filter(
+        $allFirmPermissions = array_values(array_filter(
             array_keys(self::permissions()),
             fn (string $name) => ! str_starts_with($name, 'platform.')
+        ));
+
+        // Individual lawyers keep full desk access; firm-wide seat/invite control stays with FirmAdmin.
+        $lawyerPermissions = array_values(array_filter(
+            $allFirmPermissions,
+            fn (string $name) => ! in_array($name, ['lawyers.manage', 'invitations.manage', 'users.manage', 'billing.view'], true)
         ));
 
         return [
             'Superadmin' => [
                 'platform.dashboard.view',
                 'platform.firms.manage',
-                'platform.admins.manage',
+                'platform.lawyers.manage',
             ],
-            'Owner' => $firmPermissions,
-            'Admin' => $firmPermissions,
-            'Lawyer' => [
-                // No leads/clients menu — clients appear via their appointments & cases.
-                // Lawyers can view appointments but cannot book (Admin / AI agent only).
-                'cases.view',
-                'cases.manage',
-                'documents.view',
-                'documents.manage',
-                'appointments.view',
-                'calls.view',
-                'schedules.manage',
-                'reports.view',
-            ],
-            'Staff' => [
-                'leads.view',
-                'leads.manage',
-                'clients.view',
-                'clients.manage',
-                'cases.view',
-                'cases.manage',
-                'documents.view',
-                'documents.manage',
-                'appointments.view',
-                'appointments.manage',
-                'calls.view',
-                'calls.manage',
-                'reports.view',
-            ],
+            'FirmAdmin' => $allFirmPermissions,
+            'Lawyer' => $lawyerPermissions,
         ];
     }
 
@@ -106,13 +89,30 @@ class PermissionCatalog
             );
         }
 
+        $keptRoles = [];
         foreach (self::matrix() as $roleName => $permissionNames) {
             $role = Role::query()->updateOrCreate(
                 ['name' => $roleName, 'guard_name' => 'web'],
                 [],
             );
             $role->syncPermissions($permissionNames);
+            $keptRoles[] = $roleName;
         }
+
+        Role::query()
+            ->where('guard_name', 'web')
+            ->whereNotIn('name', $keptRoles)
+            ->each(function (Role $role): void {
+                $role->permissions()->detach();
+                $role->users()->detach();
+                $role->delete();
+            });
+
+        // Drop retired platform permission if it still exists.
+        Permission::query()
+            ->where('guard_name', 'web')
+            ->where('name', 'platform.admins.manage')
+            ->delete();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

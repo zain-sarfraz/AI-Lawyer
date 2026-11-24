@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureFirmAdmin;
 use App\Http\Middleware\EnsureFirmMember;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\EnsureSuperadmin;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'firm' => EnsureFirmMember::class,
+            'firm.admin' => EnsureFirmAdmin::class,
             'superadmin' => EnsureSuperadmin::class,
             'permission' => EnsurePermission::class,
             'twilio.signature' => VerifyTwilioSignature::class,
@@ -40,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->validateCsrfTokens(except: [
             'api/webhooks/*',
+            'stripe/webhook',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

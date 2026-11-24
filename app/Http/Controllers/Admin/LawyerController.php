@@ -7,6 +7,7 @@ use App\Enums\CaseDisposition;
 use App\Http\Controllers\Controller;
 use App\Models\CaseLawRecord;
 use App\Models\Court;
+use App\Models\Firm;
 use App\Models\Jurisdiction;
 use App\Models\Lawyer;
 use App\Models\Service;
@@ -62,6 +63,8 @@ class LawyerController extends Controller implements HasMiddleware
             throw $e->redirectTo(route('lawyers.index', ['open' => 'create-lawyer']));
         }
 
+        $firmTimezone = $this->firmService->current()->resolvedTimezone();
+
         $this->lawyers->create(
             [
                 'title' => $data['title'] ?? null,
@@ -69,14 +72,14 @@ class LawyerController extends Controller implements HasMiddleware
                 'phone' => $phone,
                 'experience' => $data['experience'] ?? null,
                 'bio' => $data['bio'] ?? null,
-                'timezone' => $data['timezone'] ?? null,
+                'timezone' => !empty($data['timezone']) ? $data['timezone'] : $firmTimezone,
                 'status' => $data['status'],
                 'specialties' => [],
             ],
             [
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => $data['password'] ?? 'password',
+                'password' => !empty($data['password']) ? $data['password'] : '11223344',
             ],
             $data['service_ids'] ?? [],
             $jurisdictionIds
@@ -243,13 +246,14 @@ class LawyerController extends Controller implements HasMiddleware
             $lawyer->user->update($userUpdates);
         }
 
+        $firmTimezone = $this->firmService->current()->resolvedTimezone();
         $this->lawyers->update($lawyer, [
             'title' => $data['title'] ?? null,
             'country' => $data['phone_country'],
             'phone' => $phone,
             'experience' => $data['experience'] ?? null,
             'bio' => $data['bio'] ?? null,
-            'timezone' => $data['timezone'] ?? null,
+            'timezone' => !empty($data['timezone']) ? $data['timezone'] : ($lawyer->timezone ?? $firmTimezone),
             'status' => $data['status'],
         ], $data['service_ids'] ?? [], $this->validatedJurisdictionIds($data['jurisdiction_ids'] ?? []));
 
@@ -263,12 +267,12 @@ class LawyerController extends Controller implements HasMiddleware
             'email' => [
                 'required',
                 'email',
-                $lawyer
-                    ? Rule::unique('users', 'email')->ignore($lawyer->user_id)
-                    : Rule::unique('users', 'email'),
+                Rule::unique('users', 'email')
+                    ->where(fn ($q) => $q->where('firm_id', Firm::current()->id))
+                    ->ignore($lawyer?->user_id),
             ],
             'password' => ['nullable', 'string', 'min:8'],
-            'phone_country' => ['required', 'string', Rule::in(['PK', 'GB', 'US'])],
+            'phone_country' => ['required', 'string', Rule::in(['PK', 'GB', 'US', 'CA', 'AU'])],
             'phone_local' => ['nullable', 'string', 'max:32'],
             'jurisdiction_ids' => ['required', 'array', 'min:1'],
             'jurisdiction_ids.*' => ['integer', 'distinct', 'exists:jurisdictions,id'],
@@ -282,8 +286,8 @@ class LawyerController extends Controller implements HasMiddleware
         ], [
             'jurisdiction_ids.required' => 'Select at least one practice jurisdiction checkbox.',
             'jurisdiction_ids.min' => 'Select at least one practice jurisdiction checkbox.',
-            'phone_country.required' => 'Select a phone dial country (PK / GB / US).',
-            'email.unique' => 'This email is already registered.',
+            'phone_country.required' => 'Select a phone dial country (PK / GB / US / CA / AU).',
+            'email.unique' => 'This email is already used in this firm.',
             'password.min' => 'Password must be at least 8 characters (or leave blank).',
         ]);
     }

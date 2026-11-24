@@ -1,8 +1,10 @@
 import Alpine from 'alpinejs';
 import * as Turbo from '@hotwired/turbo';
+import Chart from 'chart.js/auto';
 
 window.Alpine = Alpine;
 window.Turbo = Turbo;
+window.Chart = Chart;
 
 // Soft page navigations (no full browser refresh).
 Turbo.session.drive = true;
@@ -80,7 +82,7 @@ window.__validateLawyerForm = (form) => {
 Alpine.data('lawyerPhoneForm', (initialCountry = '', initialLocal = '') => ({
     phoneCountry: (initialCountry || '').toUpperCase(),
     phoneLocal: initialLocal || '',
-    dialMap: { PK: '+92', GB: '+44', US: '+1' },
+    dialMap: { PK: '+92', GB: '+44', US: '+1', CA: '+1', AU: '+61' },
     get dialCode() {
         return this.dialMap[this.phoneCountry] || '';
     },
@@ -108,7 +110,7 @@ Alpine.data('lawyerPracticeForm', (initialCountry = '', initialLocal = '', juris
     jurisdictionsByCountry: jurisdictionsByCountry || {},
     selectedJurisdictions: (selectedIds || []).map(Number),
     jurisOpen: false,
-    dialMap: { PK: '+92', GB: '+44', US: '+1' },
+    dialMap: { PK: '+92', GB: '+44', US: '+1', CA: '+1', AU: '+61' },
     get dialCode() {
         return this.dialMap[this.phoneCountry] || '';
     },
@@ -249,6 +251,17 @@ Alpine.store('lawyerUi', {
     },
     openEdit(id) {
         window.dispatchEvent(new CustomEvent('open-modal', { detail: `edit-lawyer-${id}` }));
+    },
+});
+
+Alpine.store('firmMemberUi', {
+    details: null,
+    openDetails(member) {
+        this.details = member ? { ...member } : null;
+        window.dispatchEvent(new CustomEvent('open-modal', { detail: 'firm-member-details' }));
+    },
+    openEdit(id) {
+        window.dispatchEvent(new CustomEvent('open-modal', { detail: `edit-firm-member-${id}` }));
     },
 });
 

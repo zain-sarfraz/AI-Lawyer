@@ -2,9 +2,10 @@
     $idPrefix = $idPrefix ?? 'lawyer';
     $selectedServices = $selectedServices ?? [];
     $activeJurisdictions = $activeJurisdictions ?? [];
+    $showTimezone = $showTimezone ?? false;
 
     $phoneCountry = strtoupper((string) old('phone_country', $lawyer->country));
-    if (! in_array($phoneCountry, ['PK', 'GB', 'US'], true)) {
+    if (! in_array($phoneCountry, ['PK', 'GB', 'US', 'CA', 'AU'], true)) {
         $phoneCountry = '';
     }
     $split = \App\Support\Phone\PhoneNormalizer::split(old('phone_local') ? null : $lawyer->phone);
@@ -25,6 +26,8 @@
     $practiceCountries = [
         'PK' => 'Pakistan',
         'GB' => 'United Kingdom',
+        'CA' => 'Canada',
+        'AU' => 'Australia',
         'US' => 'United States',
     ];
 @endphp
@@ -53,6 +56,8 @@
                     <option value="PK">PK — Pakistan (+92)</option>
                     <option value="GB">GB — United Kingdom (+44)</option>
                     <option value="US">US — United States (+1)</option>
+                    <option value="CA">CA — Canada (+1)</option>
+                    <option value="AU">AU — Australia (+61)</option>
                 </select>
                 <input type="text" class="ui-field bg-(--surface)" :value="dialCode" readonly tabindex="-1" aria-label="Dial code">
                 <input
@@ -138,7 +143,8 @@
         </div>
         <div class="col-md-6">
             <label class="ui-label">Password</label>
-            <input type="password" name="password" class="ui-field" placeholder="{{ $lawyer->exists ? 'Leave blank to keep current' : 'Default: password' }}" autocomplete="new-password">
+            <input type="password" name="password" class="ui-field" placeholder="{{ $lawyer->exists ? 'Leave blank to keep current' : 'Default: 11223344' }}" autocomplete="new-password">
+            <p class="mt-1 text-xs text-slate-500">Default: <strong class="text-slate-700">11223344</strong> (or choose your own)</p>
         </div>
         <div class="col-md-6">
             <label class="ui-label">Status</label>
@@ -147,11 +153,16 @@
                 <option value="inactive" @selected(old('status', $lawyer->status?->value) === 'inactive')>Inactive</option>
             </select>
         </div>
+        @if($showTimezone ?? false)
         <div class="col-md-6">
             <label class="ui-label">Timezone</label>
             <input name="timezone" class="ui-field" value="{{ old('timezone', $lawyer->timezone) }}" placeholder="Asia/Karachi">
         </div>
+        @else
+            <input type="hidden" name="timezone" value="{{ old('timezone', $lawyer->timezone ?? '') }}">
+        @endif
 
+        @if($showServices ?? true)
         <div class="col-12">
             <label class="ui-label">Services this lawyer provides</label>
             @if($services->isNotEmpty())
@@ -211,6 +222,7 @@
                 <p class="small ui-muted mb-0">Pehle Services page se service add karein — phir yahan dropdown mein dikhengi.</p>
             @endif
         </div>
+        @endif
         <div class="col-12">
             <label class="ui-label">Bio / notes</label>
             <textarea name="bio" class="ui-field" rows="3">{{ old('bio', $lawyer->bio) }}</textarea>

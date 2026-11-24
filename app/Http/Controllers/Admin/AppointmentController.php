@@ -75,7 +75,7 @@ class AppointmentController extends Controller implements HasMiddleware
             'canManageCases' => auth()->user()?->can('cases.manage') ?? false,
             'canManageAppointments' => auth()->user()?->can('appointments.manage') ?? false,
             'canChangeAppointmentStatus' => auth()->user()?->can('appointments.view') ?? false,
-            'showLawyerColumn' => ! (auth()->user()?->hasRole('Lawyer') && ! auth()->user()?->hasAnyRole(['Owner', 'Admin'])),
+            'showLawyerColumn' => ! auth()->user()?->hasRole('Lawyer'),
         ]);
     }
 

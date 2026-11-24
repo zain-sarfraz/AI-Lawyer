@@ -6,13 +6,13 @@
 @php
     $userCards = $users->getCollection()->map(function ($user) {
         $initials = collect(explode(' ', $user->name ?: 'U'))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
-        $role = $user->getRoleNames()->first() ?: 'Staff';
+        $role = $user->getRoleNames()->first() ?: 'Lawyer';
         $isLawyer = $user->hasRole('Lawyer');
 
         return [
             'id' => $user->id,
             'name' => $user->name,
-            'title' => $isLawyer ? ($user->lawyer?->title ?: 'Lawyer') : 'Staff',
+            'title' => $user->lawyer?->title ?: 'Lawyer',
             'phone' => $user->lawyer?->phone,
             'email' => $user->email,
             'role' => $role,
@@ -41,16 +41,28 @@
 
 <x-legal.page-header title="Users" subtitle="Lawyers and staff with their own dashboards, appointments, and records">
     <x-slot:actions>
-        <button type="button" class="ui-btn ui-btn-primary" @click="$dispatch('open-modal', 'create-user')">Add user</button>
+        @if ($canAddLawyer ?? true)
+            <button type="button" class="ui-btn ui-btn-primary" @click="$dispatch('open-modal', 'create-user')">Add user</button>
+        @else
+            <span class="ui-btn ui-btn-secondary" title="Starter allows one lawyer only">Starter · 1 lawyer max</span>
+        @endif
     </x-slot:actions>
 </x-legal.page-header>
+
+@if (!($canAddLawyer ?? true))
+    <x-legal.card class="mb-3">
+        <p class="mb-0">Your <strong>{{ $planLabel ?? 'Starter' }}</strong> individual plan includes <strong>1 lawyer seat</strong>. Upgrade to Growth for a multi-lawyer firm workspace.</p>
+    </x-legal.card>
+@endif
 
 @if($users->isEmpty())
     <x-legal.card>
         <div class="legal-empty">
             <h3>No users yet</h3>
             <p class="mb-3">Add a lawyer or staff member to get started.</p>
-            <button type="button" class="ui-btn ui-btn-primary" @click="$dispatch('open-modal', 'create-user')">Add user</button>
+            @if ($canAddLawyer ?? true)
+                <button type="button" class="ui-btn ui-btn-primary" @click="$dispatch('open-modal', 'create-user')">Add user</button>
+            @endif
         </div>
     </x-legal.card>
 @else

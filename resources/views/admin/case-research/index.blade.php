@@ -63,7 +63,9 @@
             action="{{ route('case-research.index') }}"
             class="case-index__form"
             data-turbo-action="advance"
+            data-case-filters
         >
+            {{-- Intentionally omit `page` so filter/search changes always reset to page 1. --}}
             <div class="case-index__form-grid">
                 <div class="case-index__field case-index__field--search">
                     <label class="ui-label" for="case-q">Search</label>
@@ -142,11 +144,12 @@
             <div class="case-index__results-head">
                 <p>
                     Showing
-                    <strong>{{ $cases->firstItem() ?? 0 }}–{{ $cases->lastItem() ?? 0 }}</strong>
+                    <strong>{{ number_format($cases->firstItem() ?? 0) }}–{{ number_format($cases->lastItem() ?? 0) }}</strong>
                     of
                     <strong>{{ number_format($cases->total()) }}</strong>
                     cases
                 </p>
+                <p class="case-index__page-size">{{ $cases->perPage() }} per page</p>
             </div>
 
             <div class="ui-table-wrap case-index__table-wrap">
@@ -220,8 +223,87 @@
                 </table>
             </div>
 
-            @if($cases->hasPages())
-                <div class="case-index__pager">{{ $cases->links() }}</div>
+            @if($cases->total() > 0)
+                @php
+                    $currentPage = $cases->currentPage();
+                    $lastPage = max(1, $cases->lastPage());
+                    $window = 2;
+                    $pageStart = max(1, $currentPage - $window);
+                    $pageEnd = min($lastPage, $currentPage + $window);
+                    if ($pageEnd - $pageStart < ($window * 2)) {
+                        $pageStart = max(1, $pageEnd - ($window * 2));
+                        $pageEnd = min($lastPage, $pageStart + ($window * 2));
+                    }
+                @endphp
+                <nav class="case-index__pager" aria-label="Cases pagination">
+                    <p class="case-index__pager-summary">
+                        Showing
+                        <strong>{{ number_format($cases->firstItem() ?? 0) }}–{{ number_format($cases->lastItem() ?? 0) }}</strong>
+                        of
+                        <strong>{{ number_format($cases->total()) }}</strong>
+                        cases
+                    </p>
+
+                    <div class="case-index__pager-nav">
+                        @if($cases->onFirstPage())
+                            <span class="case-index__page-btn is-disabled" aria-disabled="true">
+                                <x-ui.icon name="chevron-left" class="h-4 w-4" />
+                                <span>Previous</span>
+                            </span>
+                        @else
+                            <a
+                                href="{{ $cases->previousPageUrl() }}"
+                                class="case-index__page-btn"
+                                rel="prev"
+                                data-turbo-action="advance"
+                            >
+                                <x-ui.icon name="chevron-left" class="h-4 w-4" />
+                                <span>Previous</span>
+                            </a>
+                        @endif
+
+                        <div class="case-index__page-numbers" role="list">
+                            @if($pageStart > 1)
+                                <a href="{{ $cases->url(1) }}" class="case-index__page-num" data-turbo-action="advance" role="listitem">1</a>
+                                @if($pageStart > 2)
+                                    <span class="case-index__page-ellipsis" aria-hidden="true">…</span>
+                                @endif
+                            @endif
+
+                            @for($page = $pageStart; $page <= $pageEnd; $page++)
+                                @if($page === $currentPage)
+                                    <span class="case-index__page-num is-current" aria-current="page" role="listitem">{{ $page }}</span>
+                                @else
+                                    <a href="{{ $cases->url($page) }}" class="case-index__page-num" data-turbo-action="advance" role="listitem">{{ $page }}</a>
+                                @endif
+                            @endfor
+
+                            @if($pageEnd < $lastPage)
+                                @if($pageEnd < $lastPage - 1)
+                                    <span class="case-index__page-ellipsis" aria-hidden="true">…</span>
+                                @endif
+                                <a href="{{ $cases->url($lastPage) }}" class="case-index__page-num" data-turbo-action="advance" role="listitem">{{ $lastPage }}</a>
+                            @endif
+                        </div>
+
+                        @if($cases->hasMorePages())
+                            <a
+                                href="{{ $cases->nextPageUrl() }}"
+                                class="case-index__page-btn"
+                                rel="next"
+                                data-turbo-action="advance"
+                            >
+                                <span>Next</span>
+                                <x-ui.icon name="chevron-right" class="h-4 w-4" />
+                            </a>
+                        @else
+                            <span class="case-index__page-btn is-disabled" aria-disabled="true">
+                                <span>Next</span>
+                                <x-ui.icon name="chevron-right" class="h-4 w-4" />
+                            </span>
+                        @endif
+                    </div>
+                </nav>
             @endif
         </section>
     @endif

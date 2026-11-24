@@ -28,7 +28,7 @@ class DashboardController extends Controller
         $adminsQuery = User::query()
             ->withoutGlobalScopes()
             ->whereNotNull('firm_id')
-            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['Owner', 'Admin']))
+            ->whereHas('roles', fn ($q) => $q->where('name', 'Lawyer'))
             ->with(['roles', 'firm', 'lawyer' => fn ($q) => $q->withoutGlobalScopes()]);
 
         $firmAdminsCount = (clone $adminsQuery)->count();
@@ -49,7 +49,7 @@ class DashboardController extends Controller
             ->count();
         $totalFeeAmount = (float) (clone $allAppointments)->sum('fee_amount');
 
-        // 3. Firm Admins with Per-Admin Metrics & Values
+        // 3. Firm lawyers with per-lawyer metrics
         $admins = (clone $adminsQuery)->orderBy('name')->get();
 
         // Aggregate counts per firm to keep query count low
@@ -87,7 +87,7 @@ class DashboardController extends Controller
             $cancelledAppts = (int) $firmAppts->filter(fn ($r) => in_array($getStatusVal($r), ['cancelled', 'no_show'], true))->sum('count');
             $totalFees = (float) $firmAppts->sum('total_fees');
 
-            $roleName = $admin->getRoleNames()->first() ?? 'Admin';
+            $roleName = $admin->getRoleNames()->first() ?? 'Lawyer';
             $statusVal = $admin->status?->value ?? (string) $admin->status;
 
             return [

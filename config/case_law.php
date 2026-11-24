@@ -49,6 +49,28 @@ return [
         ],
     ],
 
+    // Federal Court of Australia judgments RSS.
+    'australia_cases' => [
+        'rss_url' => env('AUSTRALIA_CASES_API_URL', 'https://www.judgments.fedcourt.gov.au/rss/fca-judgments'),
+    ],
+
+    // Free A2AJ Canadian Legal Data API (preferred when CANADA_CASES_API_URL is set).
+    'canada_cases' => [
+        'base_url' => env('CANADA_CASES_API_URL', 'https://api.a2aj.ca'),
+        'language' => env('CANADA_CASES_LANGUAGE', 'en'),
+        'default_query' => env('CANADA_CASES_DEFAULT_QUERY', 'v'),
+        'datasets_by_jurisdiction' => [
+            'CA-FED' => array_values(array_filter(array_map(
+                'trim',
+                explode(',', (string) env('CANADA_CASES_CA_FED_DATASETS', 'SCC,FCA,FC'))
+            ))),
+            'CA-ON' => array_values(array_filter(array_map(
+                'trim',
+                explode(',', (string) env('CANADA_CASES_CA_ON_DATASETS', 'ONCA'))
+            ))),
+        ],
+    ],
+
     'huggingface_scp' => [
         // Map dataset columns → case_law_records fields. Adjust after inspecting the file.
         'column_map' => [
@@ -88,8 +110,9 @@ return [
         'PK-FED' => App\Domain\CaseLaw\Adapters\PakistanCaseLawAdapter::class,
         'PK-PB' => App\Domain\CaseLaw\Adapters\PakistanCaseLawAdapter::class,
         'PK-IS' => App\Domain\CaseLaw\Adapters\PakistanCaseLawAdapter::class,
-        'CA-FED' => App\Domain\CaseLaw\Adapters\CanliiAdapter::class,
-        'CA-ON' => App\Domain\CaseLaw\Adapters\CanliiAdapter::class,
+        'CA-FED' => App\Domain\CaseLaw\Adapters\A2ajCanadaAdapter::class,
+        'CA-ON' => App\Domain\CaseLaw\Adapters\A2ajCanadaAdapter::class,
+        'AU-FED' => App\Domain\CaseLaw\Adapters\AustraliaFedCourtRssAdapter::class,
         'US-FED' => App\Domain\CaseLaw\Adapters\CourtListenerAdapter::class,
     ],
 

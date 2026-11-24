@@ -33,11 +33,19 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
 
         $adapter = $registry->forCode($jurisdiction->code);
         $configuredMax = (int) config('case_law.fetch.max_requests_per_run', 25);
-        $max = $this->limit > 0 ? $this->limit : $configuredMax;
+        // limit <= 0 means unlimited (used by cases:fetch --all).
+        $unlimited = $this->limit <= 0;
+        $max = $unlimited ? 0 : ($this->limit > 0 ? $this->limit : $configuredMax);
         $delayMs = (int) config('case_law.fetch.delay_ms', 2500);
+        $codeUpper = strtoupper($jurisdiction->code);
+        // Bulk RSS / US listing already rate-limits at the HTTP layer — skip per-row sleeps.
+        if (str_starts_with($codeUpper, 'US-') || str_starts_with($codeUpper, 'AU-')) {
+            $delayMs = 0;
+        }
         $count = 0;
         $failed = 0;
         $skipped = 0;
+        $processed = 0;
 
         $jurisdiction->update([
             'last_case_fetch_at' => now(),
@@ -51,9 +59,9 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
                 'jurisdiction_code' => $jurisdiction->code,
                 // US listing uses search-only mapping (fast). Set enrich=true for full text/AI.
                 'enrich' => false,
-                'enrich_counsel' => str_starts_with(strtoupper($jurisdiction->code), 'GB-'),
+                'enrich_counsel' => str_starts_with($codeUpper, 'GB-'),
             ], $this->options)) as $row) {
-                if ($count >= $max) {
+                if (! $unlimited && $processed >= $max) {
                     break;
                 }
                 try {
@@ -67,6 +75,7 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
                     } else {
                         $count++;
                     }
+                    $processed++;
                 } catch (Throwable $e) {
                     $failed++;
                     Log::error('case_law.fetch.upsert_failed', [
@@ -76,7 +85,7 @@ class FetchCasesForJurisdictionJob implements ShouldQueue
                     ]);
                 }
 
-                if ($delayMs > 0 && ! str_starts_with(strtoupper($jurisdiction->code), 'US-')) {
+                if ($delayMs > 0) {
                     usleep($delayMs * 1000);
                 }
             }

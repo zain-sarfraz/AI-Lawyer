@@ -22,6 +22,9 @@
 /storage/pail
 /storage/framework/*.json
 /vendor
+vendor.zip
+*.zip
+/ai_lawyer.sql
 _ide_helper.php
 Homestead.json
 Homestead.yaml

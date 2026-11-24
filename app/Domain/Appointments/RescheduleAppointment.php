@@ -39,7 +39,7 @@ class RescheduleAppointment
             return BookingResult::fail('INVALID_INPUT', 'This appointment cannot be rescheduled.');
         }
 
-        $duration = AvailabilityService::SLOT_MINUTES;
+        $duration = AvailabilityService::slotMinutesFor();
         $startUtc = $this->clock->toUtc($newStartAt);
         $endUtc = $startUtc->copy()->addMinutes($duration);
         $bookable = $type ?? $service;

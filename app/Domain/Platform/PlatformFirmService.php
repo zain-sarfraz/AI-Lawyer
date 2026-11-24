@@ -40,24 +40,21 @@ class PlatformFirmService
     }
 
     /**
-     * Add an Owner/Admin login to an existing firm workspace.
+     * Add a Lawyer login to an existing firm workspace.
      *
      * @param  array{admin_name: string, admin_email: string, admin_password: string, admin_role?: string}  $data
      */
     public function addAdminToFirm(Firm $firm, array $data): User
     {
         $adminEmail = strtolower(trim($data['admin_email']));
-        $role = in_array($data['admin_role'] ?? 'Admin', ['Owner', 'Admin'], true)
-            ? ($data['admin_role'] ?? 'Admin')
-            : 'Admin';
 
-        if (User::query()->withoutGlobalScopes()->where('email', $adminEmail)->exists()) {
+        if (User::emailTakenInFirm($adminEmail, (int) $firm->id)) {
             throw ValidationException::withMessages([
-                'admin_email' => 'This email is already registered.',
+                'admin_email' => 'This email is already used in this firm.',
             ]);
         }
 
-        return app(FirmContext::class)->run((int) $firm->id, function () use ($firm, $data, $adminEmail, $role) {
+        return app(FirmContext::class)->run((int) $firm->id, function () use ($firm, $data, $adminEmail) {
             $user = User::query()->create([
                 'firm_id' => $firm->id,
                 'name' => $data['admin_name'],
@@ -66,7 +63,7 @@ class PlatformFirmService
                 'status' => UserStatus::Active,
                 'email_verified_at' => now(),
             ]);
-            $user->syncRoles([$role]);
+            $user->syncRoles(['Lawyer']);
 
             return $user;
         });
@@ -111,16 +108,14 @@ class PlatformFirmService
             ]);
         }
 
-        if (! $admin->hasAnyRole(['Owner', 'Admin'])) {
+        if (! $admin->hasRole('Lawyer')) {
             throw ValidationException::withMessages([
-                'admin_role' => 'Only firm Owner/Admin users can be edited here.',
+                'admin_role' => 'Only firm Lawyer users can be edited here.',
             ]);
         }
 
         $adminEmail = strtolower(trim($data['admin_email']));
-        $role = in_array($data['admin_role'] ?? 'Admin', ['Owner', 'Admin'], true)
-            ? ($data['admin_role'] ?? 'Admin')
-            : 'Admin';
+        $role = 'Lawyer';
         $status = in_array($data['status'] ?? 'active', ['active', 'inactive', 'suspended'], true)
             ? ($data['status'] ?? 'active')
             : 'active';
@@ -132,15 +127,9 @@ class PlatformFirmService
             ]);
         }
 
-        $emailTaken = User::query()
-            ->withoutGlobalScopes()
-            ->where('email', $adminEmail)
-            ->where('id', '!=', $admin->id)
-            ->exists();
-
-        if ($emailTaken) {
+        if (User::emailTakenInFirm($adminEmail, $firmId, (int) $admin->id)) {
             throw ValidationException::withMessages([
-                'admin_email' => 'This email is already registered.',
+                'admin_email' => 'This email is already used in this firm.',
             ]);
         }
 
@@ -173,9 +162,9 @@ class PlatformFirmService
             ]);
         }
 
-        if (! $admin->hasAnyRole(['Owner', 'Admin'])) {
+        if (! $admin->hasRole('Lawyer')) {
             throw ValidationException::withMessages([
-                'admin' => 'Only firm Owner/Admin users can be deleted here.',
+                'admin' => 'Only firm Lawyer users can be deleted here.',
             ]);
         }
 

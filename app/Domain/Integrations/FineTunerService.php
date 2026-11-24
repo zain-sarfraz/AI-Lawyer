@@ -38,7 +38,7 @@ class FineTunerService
 
     public function configured(): bool
     {
-        return $this->connection() !== null;
+        return $this->connection() !== null || filled($this->settings()['model_id'] ?? config('services.synthflow.agent_id'));
     }
 
     /**
@@ -72,7 +72,7 @@ class FineTunerService
         }
 
         return [
-            'connected' => $connection !== null,
+            'connected' => $connection !== null || filled($modelId),
             'error' => null,
             'agents' => $agents,
             'numbers' => $numbers,
@@ -123,13 +123,25 @@ class FineTunerService
         $connection = $this->connection();
         $settings = $this->settings();
         if ($connection === null) {
+            $modelId = $settings['model_id'] ?? config('services.synthflow.agent_id');
+            $phone = $settings['phone_number'] ?? config('services.synthflow.agent_phone');
+            $agentName = (string) ($settings['agent_name'] ?? config('services.synthflow.agent_name', 'Qubetech AI Lawyer'));
+            $hasModel = filled($modelId);
+
             return [
                 'connected' => false,
                 'error' => null,
-                'agents' => [],
-                'numbers' => [],
-                'model_id' => $settings['model_id'] ?? null,
-                'phone_number' => $settings['phone_number'] ?? null,
+                'agents' => $hasModel ? [[
+                    'id' => (string) $modelId,
+                    'name' => $agentName,
+                    'description' => '',
+                    'phone_number' => is_string($phone) ? (string) $phone : '',
+                    'type' => 'inbound',
+                    'voice' => '',
+                ]] : [],
+                'numbers' => filled($phone) ? [['number' => (string) $phone, 'available' => true]] : [],
+                'model_id' => is_string($modelId) ? (string) $modelId : null,
+                'phone_number' => is_string($phone) ? (string) $phone : null,
                 'last_synced_at' => $settings['last_synced_at'] ?? null,
             ];
         }
@@ -185,6 +197,9 @@ class FineTunerService
             'provider_label' => 'synthflow',
         ]));
 
+        $this->connectionCache = false;
+        $this->settingsCache = null;
+        $this->integrationCache = false;
         $this->forgetSnapshotCache($workspaceId, $apiKey);
 
         $linked = $this->adoptExistingAgent();
@@ -319,16 +334,28 @@ class FineTunerService
         $publicBase = rtrim((string) config('app.url'), '/');
         $agentName = trim((string) ($name ?: (($firm->receptionist_name ?: 'AI Receptionist').' · '.$firm->firm_name)));
 
-        $agent = array_filter([
+        $greeting = $this->receptionist->greetingMessage();
+        if (! filled($firm->ai_greeting)) {
+            $firm->forceFill(['ai_greeting' => $greeting])->save();
+        }
+
+        $listening = array_filter(
+            $this->agentListeningConfig($firm),
+            fn ($value) => $value !== null && $value !== ''
+        );
+
+        $agent = array_merge($listening, [
             'prompt' => $this->receptionist->systemPrompt(withCatalog: true),
-            'greeting_message' => $this->receptionist->greetingMessage(),
+            'greeting_message' => $greeting,
             'greeting_message_mode' => 'agent_static',
             'timezone' => $firm->resolvedTimezone(),
-            'voice_id' => filled($firm->ai_voice) ? (string) $firm->ai_voice : null,
             'llm' => (string) config('services.synthflow.llm', 'gpt-4.1-mini'),
             'is_transcript_disabled' => false,
-            ...$this->agentListeningConfig($firm),
-        ], fn ($value) => $value !== null && $value !== '');
+        ]);
+
+        if (filled($firm->ai_voice)) {
+            $agent['voice_id'] = (string) $firm->ai_voice;
+        }
 
         $payload = [
             'type' => 'inbound',
@@ -495,8 +522,10 @@ class FineTunerService
         $payload = array_filter([
             'model_id' => $modelId,
             'phone' => $phone,
+            'phone_number_to' => $phone,
             'name' => $name,
             'from_phone_number' => filled($from) ? (string) $from : null,
+            'phone_number_from' => filled($from) ? (string) $from : null,
             'prompt' => $this->receptionist->systemPrompt(withCatalog: true),
             'greeting' => $this->receptionist->greetingMessage(),
         ], fn ($value) => $value !== null && $value !== '');
@@ -528,7 +557,7 @@ class FineTunerService
     {
         $connection = $this->connection();
         if ($connection === null) {
-            return ['ok' => false, 'error' => 'Synthflow is not connected.'];
+            return ['ok' => false, 'error' => 'Synthflow API key is missing. Set SYNTHFLOW_API_KEY in .env or connect your workspace to sync live to Synthflow.'];
         }
 
         $modelId = $modelId ?: ($this->settings()['model_id'] ?? config('services.synthflow.agent_id'));
@@ -540,17 +569,31 @@ class FineTunerService
         $publicBase = rtrim((string) config('app.url'), '/');
         $secret = (string) config('services.voice_gateway.secret');
 
+        // Keep First message visible in CRM and spoken on calls after every sync.
+        $greeting = $this->receptionist->greetingMessage();
+        if (! filled($firm->ai_greeting)) {
+            $firm->forceFill(['ai_greeting' => $greeting])->save();
+        }
+
         $actions = $this->syncBookingActions($connection, $modelId, $publicBase, $secret, (int) $firm->id);
 
-        $agent = array_filter([
+        $listening = array_filter(
+            $this->agentListeningConfig($firm),
+            fn ($value) => $value !== null && $value !== ''
+        );
+
+        // Always force agent-speaks-first. Do not let array_filter drop greeting fields.
+        $agent = array_merge($listening, [
             'prompt' => $this->receptionist->systemPrompt(withCatalog: true),
-            'greeting_message' => $this->receptionist->greetingMessage(),
+            'greeting_message' => $greeting,
             'greeting_message_mode' => 'agent_static',
             'timezone' => $firm->resolvedTimezone(),
-            'voice_id' => filled($firm->ai_voice) ? (string) $firm->ai_voice : null,
             'is_transcript_disabled' => false,
-            ...$this->agentListeningConfig($firm),
-        ], fn ($value) => $value !== null && $value !== '');
+        ]);
+
+        if (filled($firm->ai_voice)) {
+            $agent['voice_id'] = (string) $firm->ai_voice;
+        }
 
         $payload = [
             'external_webhook_url' => $publicBase.'/api/webhooks/finetuner/post-call',
@@ -569,13 +612,6 @@ class FineTunerService
                 ->acceptJson()
                 ->timeout(25)
                 ->put($connection['base_url'].'/assistants/'.rawurlencode($modelId), $payload);
-
-            if (! $response->successful()) {
-                $response = Http::withToken($connection['api_key'])
-                    ->acceptJson()
-                    ->timeout(25)
-                    ->patch($connection['base_url'].'/assistants/'.rawurlencode($modelId), $payload);
-            }
         } catch (\Throwable $exception) {
             Log::warning('Synthflow sync agent failed', ['message' => $exception->getMessage()]);
 
@@ -583,13 +619,35 @@ class FineTunerService
         }
 
         if (! $response->successful()) {
-            return ['ok' => false, 'error' => $this->errorMessage($response->json(), $response->status())];
+            $error = $this->errorMessage($response->json(), $response->status());
+
+            // Voicemail "human speaks first" mode blocks agent_static greetings — retry without conflicting fields.
+            if (str_contains(strtolower($error), 'voicemail') || str_contains(strtolower($error), 'greeting_message_mode')) {
+                $payload['agent']['greeting_message_mode'] = 'agent_static';
+                $payload['agent']['greeting_message'] = $greeting;
+                unset($payload['voicemail_message']);
+
+                $retry = Http::withToken($connection['api_key'])
+                    ->acceptJson()
+                    ->timeout(25)
+                    ->put($connection['base_url'].'/assistants/'.rawurlencode($modelId), $payload);
+
+                if (! $retry->successful()) {
+                    return ['ok' => false, 'error' => $this->errorMessage($retry->json(), $retry->status())];
+                }
+            } else {
+                return ['ok' => false, 'error' => $error];
+            }
         }
 
         $this->mergeSettings([
             'model_id' => $modelId,
             'last_synced_at' => now()->toIso8601String(),
             'action_ids' => $actions['action_ids'],
+            'greeting_message' => $greeting,
+            'greeting_message_mode' => 'agent_static',
+            'firm_id' => (int) $firm->id,
+            'account_label' => $firm->isFirmAccount() ? 'firm' : 'individual',
         ]);
 
         $this->forgetSnapshotCache($connection['workspace_id'], $connection['api_key']);
@@ -968,7 +1026,7 @@ class FineTunerService
             'patience_level' => 'high',
             'min_words_to_interrupt' => 3,
             'initial_pause_seconds' => 1,
-            'transcriber_endpointing' => 1200,
+            'transcriber_endpointing' => 300,
             'transcriber_speech_recognition' => 'high_accuracy',
             // Phone calls in PK often mix English/Urdu — Synthflow STT catches speech better than en-only models.
             'transcriber_provider' => 'synthflow-stt',

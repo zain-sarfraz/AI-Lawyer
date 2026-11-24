@@ -14,11 +14,48 @@ class FirmService
     public function current(): FirmSetting
     {
         $contextId = app(FirmContext::class)->id();
+        $user = auth()->user();
+
         if ($contextId === null) {
+            if ($user && ($user->isIndividual() || $user->role === 'individual_lawyer')) {
+                $firm = FirmSetting::withoutGlobalScopes()
+                    ->where(function ($q) use ($user) {
+                        $q->where('owner_id', $user->id)
+                          ->orWhere('id', $user->firm_id);
+                    })
+                    ->first();
+
+                if (! $firm) {
+                    $practiceName = $user->name ? "{$user->name}'s Practice" : 'Individual Legal Practice';
+                    $firm = FirmSetting::withoutGlobalScopes()->create([
+                        'name' => $practiceName,
+                        'firm_name' => $practiceName,
+                        'legal_name' => $user->name,
+                        'owner_id' => $user->id,
+                        'account_type' => 'individual',
+                        'plan' => 'starter',
+                        'status' => 'active',
+                        'subscription_status' => 'active',
+                        'max_lawyers' => 1,
+                        'timezone' => Firm::DEFAULT_TIMEZONE,
+                        'currency' => 'USD',
+                        'receptionist_name' => 'AI Legal Assistant',
+                        'ai_greeting' => 'Hello, thank you for calling. How can I help you today?',
+                    ]);
+                }
+
+                if ($user->firm_id !== $firm->id) {
+                    $user->firm_id = $firm->id;
+                    $user->saveQuietly();
+                }
+
+                return $firm;
+            }
+
             throw new \RuntimeException('No firm context is set. Firm workspace routes require a firm member.');
         }
 
-        $firm = FirmSetting::query()->find($contextId);
+        $firm = FirmSetting::query()->find($contextId) ?: FirmSetting::withoutGlobalScopes()->find($contextId);
         if (! $firm instanceof FirmSetting) {
             throw new \RuntimeException('Firm workspace not found for the current context.');
         }

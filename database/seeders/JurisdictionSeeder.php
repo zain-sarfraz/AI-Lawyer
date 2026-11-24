@@ -19,6 +19,7 @@ class JurisdictionSeeder extends Seeder
             ['code' => 'GB-EAW', 'country_code' => 'GB', 'name' => 'United Kingdom (England & Wales)', 'is_active' => true],
             ['code' => 'CA-FED', 'country_code' => 'CA', 'name' => 'Canada (Federal)', 'is_active' => true],
             ['code' => 'CA-ON', 'country_code' => 'CA', 'name' => 'Ontario (Canada)', 'is_active' => true],
+            ['code' => 'AU-FED', 'country_code' => 'AU', 'name' => 'Australia (Federal Court)', 'is_active' => true],
             ['code' => 'US-FED', 'country_code' => 'US', 'name' => 'United States (Federal)', 'is_active' => true],
         ];
 
@@ -53,6 +54,7 @@ class JurisdictionSeeder extends Seeder
             ['jurisdiction' => 'CA-FED', 'name' => 'Federal Court', 'level' => 'high', 'external_court_id' => null],
             ['jurisdiction' => 'CA-ON', 'name' => 'Court of Appeal for Ontario', 'level' => 'appeal', 'external_court_id' => null],
             ['jurisdiction' => 'CA-ON', 'name' => 'Ontario Superior Court of Justice', 'level' => 'high', 'external_court_id' => null],
+            ['jurisdiction' => 'AU-FED', 'name' => 'Federal Court of Australia', 'level' => 'high', 'external_court_id' => null],
             ['jurisdiction' => 'US-FED', 'name' => 'Supreme Court of the United States', 'level' => 'supreme', 'external_court_id' => 'scotus'],
             ['jurisdiction' => 'US-FED', 'name' => 'U.S. Court of Appeals for the D.C. Circuit', 'level' => 'appeal', 'external_court_id' => 'cadc'],
             ['jurisdiction' => 'US-FED', 'name' => 'U.S. Court of Appeals for the Federal Circuit', 'level' => 'appeal', 'external_court_id' => 'cafc'],

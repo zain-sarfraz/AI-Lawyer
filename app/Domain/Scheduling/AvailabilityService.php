@@ -23,13 +23,29 @@ use Illuminate\Support\Collection;
 
 class AvailabilityService
 {
-    /** Fixed appointment slot length (minutes). */
+    /** Fallback appointment slot length (minutes) when firm settings are unset. */
     public const SLOT_MINUTES = 30;
 
     public function __construct(
         private readonly FirmService $firmService,
         private readonly FirmTime $clock,
     ) {}
+
+    /**
+     * Consultation slot length from firm settings (slot interval, else default duration).
+     */
+    public static function slotMinutesFor(?Firm $firm = null): int
+    {
+        $firm ??= app(FirmService::class)->current();
+        $interval = (int) ($firm->slot_interval_minutes ?? 0);
+        if ($interval >= 5) {
+            return $interval;
+        }
+
+        $duration = (int) ($firm->default_duration_minutes ?? 0);
+
+        return $duration >= 5 ? $duration : self::SLOT_MINUTES;
+    }
 
     /**
      * Bookable slots for a lawyer and appointment type across a firm-local date range.
@@ -50,13 +66,14 @@ class AvailabilityService
             return [];
         }
 
+        $slotMinutes = self::slotMinutesFor($firm);
         $slots = [];
         for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
             $slots = array_merge($slots, $this->slotsOnDate(
                 $lawyer,
                 $day,
                 $firm,
-                self::SLOT_MINUTES,
+                $slotMinutes,
                 (int) $firm->buffer_before_minutes,
                 (int) $firm->buffer_minutes,
                 [
@@ -89,13 +106,14 @@ class AvailabilityService
         $localDate = $this->clock->parseLocal($this->dateString($date), $firm)->startOfDay();
         $bufferAfter = (int) ($service->buffer_minutes ?? $firm->buffer_minutes);
 
+        $slotMinutes = self::slotMinutesFor($firm);
         $slots = [];
         foreach ($lawyers as $candidate) {
             $slots = array_merge($slots, $this->slotsOnDate(
                 $candidate,
                 $localDate,
                 $firm,
-                self::SLOT_MINUTES,
+                $slotMinutes,
                 (int) $firm->buffer_before_minutes,
                 $bufferAfter,
                 [
@@ -185,7 +203,7 @@ class AvailabilityService
             $startAt instanceof CarbonInterface ? $startAt->toIso8601String() : $startAt,
             $firm,
         );
-        $duration = self::SLOT_MINUTES;
+        $duration = self::slotMinutesFor($firm);
         $bufferBefore = (int) $firm->buffer_before_minutes;
         $bufferAfter = $bookable instanceof Service
             ? (int) ($bookable->buffer_minutes ?? $firm->buffer_minutes)
@@ -258,9 +276,9 @@ class AvailabilityService
             return [];
         }
 
-        // Fixed 30-minute slots (start every 30 minutes, each lasts 30 minutes).
-        $interval = self::SLOT_MINUTES;
-        $duration = self::SLOT_MINUTES;
+        // Firm-configured slot length (start every N minutes, each lasts N minutes).
+        $interval = self::slotMinutesFor($firm);
+        $duration = $interval;
         $earliest = $this->clock->now($firm)->addMinutes((int) $firm->min_notice_minutes);
         $blocking = $this->blockingAppointments($lawyer->id, $day, $bufferBefore, $bufferAfter);
 

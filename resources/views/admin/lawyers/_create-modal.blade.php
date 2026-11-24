@@ -24,6 +24,7 @@
             'activeJurisdictions' => $activeJurisdictions ?? [],
             'idPrefix' => 'create_lawyer',
             'modalName' => 'create-lawyer',
+            'showTimezone' => false,
         ])
         <div class="mt-4 flex justify-end gap-2 border-t border-(--line) pt-4">
             <button type="button" class="ui-btn ui-btn-ghost" @click="show = false">Cancel</button>

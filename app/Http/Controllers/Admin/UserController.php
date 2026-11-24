@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Users\FirmUserService;
 use App\Http\Controllers\Controller;
+use App\Models\Firm;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,11 +29,15 @@ class UserController extends Controller implements HasMiddleware
     {
         $users = User::query()
             ->with(['roles', 'lawyer'])
-            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['Lawyer', 'Staff']))
+            ->whereHas('roles', fn ($q) => $q->where('name', 'Lawyer'))
             ->latest('id')
             ->paginate(20);
 
-        return view('admin.users.index', compact('users'));
+        $firm = Firm::current();
+        $canAddLawyer = $firm->canAddLawyer();
+        $planLabel = $firm->plan ? ucfirst((string) $firm->plan) : 'Custom';
+
+        return view('admin.users.index', compact('users', 'canAddLawyer', 'planLabel'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -41,10 +46,11 @@ class UserController extends Controller implements HasMiddleware
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'in:Lawyer,Staff'],
+            'role' => ['nullable', 'in:Lawyer'],
             'phone' => ['nullable', 'string', 'max:50'],
             'title' => ['nullable', 'string', 'max:255'],
         ]);
+        $data['role'] = 'Lawyer';
 
         $user = $this->users->create($data);
 
@@ -70,11 +76,12 @@ class UserController extends Controller implements HasMiddleware
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'in:Lawyer,Staff'],
+            'role' => ['nullable', 'in:Lawyer'],
             'status' => ['nullable', 'in:active,inactive,suspended'],
             'phone' => ['nullable', 'string', 'max:50'],
             'title' => ['nullable', 'string', 'max:255'],
         ]);
+        $data['role'] = 'Lawyer';
 
         $this->users->update($user, $data);
 

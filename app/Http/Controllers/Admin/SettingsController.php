@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class SettingsController extends Controller implements HasMiddleware
@@ -35,7 +36,7 @@ class SettingsController extends Controller implements HasMiddleware
         if (! auth()->user()?->can('firm.settings.manage')) {
             return redirect()
                 ->route('profile.edit')
-                ->with('success', 'Account settings are on your Profile page. Firm settings are managed by Admin.');
+                ->with('success', 'Account settings are on your Profile page.');
         }
 
         $this->authorize('view', $this->firm->current());
@@ -73,9 +74,10 @@ class SettingsController extends Controller implements HasMiddleware
             'recording_enabled' => ['sometimes', 'boolean'],
         ]) + ['recording_enabled' => $request->boolean('recording_enabled')];
 
-        $this->firm->update($data);
+        $firm = $this->firm->update($data);
+        Cache::forget('ai.catalog.'.$firm->id);
 
-        return back()->with('success', 'Settings saved.');
+        return back()->with('success', 'Settings saved. Booking and AI catalog now use the new values — re-sync AI Receptionist to push the prompt to Synthflow.');
     }
 
     public function updateIntegration(Request $request): RedirectResponse

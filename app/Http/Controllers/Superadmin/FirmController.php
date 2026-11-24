@@ -16,14 +16,40 @@ class FirmController extends Controller
 {
     public function __construct(private readonly PlatformFirmService $platform) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        $firms = Firm::query()
-            ->withCount('users')
-            ->latest('id')
-            ->paginate(20);
+        $query = Firm::query()->withCount('users');
 
-        return view('superadmin.firms.index', compact('firms'));
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('firm_name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($status = $request->input('status')) {
+            if ($status === 'active') {
+                $query->where('status', 'active');
+            } elseif ($status === 'inactive' || $status === 'suspended') {
+                $query->where('status', '!=', 'active');
+            }
+        }
+
+        $firms = $query->orderBy('id', 'asc')->paginate(10)->withQueryString();
+
+        $totalFirms = Firm::query()->count();
+        $activeFirms = Firm::query()->where('status', 'active')->count();
+        $inactiveFirms = Firm::query()->where('status', '!=', 'active')->count();
+
+        $recentFirms = Firm::query()->latest('id')->limit(5)->get();
+
+        return view('superadmin.firms.index', compact(
+            'firms',
+            'totalFirms',
+            'activeFirms',
+            'inactiveFirms',
+            'recentFirms'
+        ));
     }
 
     public function create(): RedirectResponse
@@ -45,7 +71,7 @@ class FirmController extends Controller
 
         return redirect()
             ->route('superadmin.firms.show', $firm)
-            ->with('success', 'Firm created. Add an admin separately from Admins.');
+            ->with('success', 'Firm created. Add lawyers from the Lawyers page.');
     }
 
     public function show(Firm $firm): View

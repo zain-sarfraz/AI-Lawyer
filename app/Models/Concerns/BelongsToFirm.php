@@ -29,6 +29,21 @@ trait BelongsToFirm
                     return;
                 }
 
+                // Individual lawyers intentionally have no firm.
+                if ($model instanceof \App\Models\Lawyer && ($existing === null || $existing === '')) {
+                    $model->setAttribute('firm_id', null);
+
+                    return;
+                }
+
+                // Individual accounts intentionally have no firm.
+                $authUser = auth()->user();
+                if ($authUser && ($authUser->account_type === 'individual' || $authUser->role === 'individual_lawyer') && $authUser->firm_id === null) {
+                    $model->setAttribute('firm_id', null);
+
+                    return;
+                }
+
                 if ($existing === null || $existing === '') {
                     throw new RuntimeException('A firm context is required to create '.static::class.'.');
                 }
@@ -45,13 +60,14 @@ trait BelongsToFirm
 
         static::updating(function (Model $model): void {
             $contextId = app(FirmContext::class)->id();
-            $original = (int) $model->getOriginal('firm_id');
+            $rawOriginal = $model->getOriginal('firm_id');
+            $original = $rawOriginal !== null ? (int) $rawOriginal : null;
 
-            if ($contextId !== null && $original !== (int) $contextId) {
+            if ($contextId !== null && $original !== null && $original !== (int) $contextId) {
                 throw new RuntimeException('Cannot update a '.static::class.' that belongs to another firm.');
             }
 
-            if ($model->isDirty('firm_id') && (int) $model->getAttribute('firm_id') !== $original) {
+            if ($original !== null && $model->isDirty('firm_id') && (int) $model->getAttribute('firm_id') !== $original) {
                 throw new RuntimeException('firm_id cannot be reassigned.');
             }
         });

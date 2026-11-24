@@ -132,10 +132,12 @@
         <div class="sf-step">
             <h4>2. Use your Synthflow agent</h4>
             <p class="small ui-muted mb-3">
-                Attach the existing inbound agent <strong>{{ $preferredAgentName }}</strong>
-                on <strong>{{ $preferredAgentPhone }}</strong>.
-                Connecting the workspace selects that agent automatically and syncs services, lawyers, and booking tools.
-                Do not create a second agent.
+                Attach your existing Synthflow inbound agent
+                @if($preferredAgentName)<strong>{{ $preferredAgentName }}</strong>@endif
+                @if($preferredAgentPhone) on <strong>{{ $preferredAgentPhone }}</strong>@endif.
+                Firm Admin and Individual Lawyer workspaces each store their own connection under their firm,
+                then sync greeting, services, lawyers, and booking tools to that one agent.
+                Use <strong>Use this agent</strong> — do not create a second agent unless you need one.
             </p>
             @php
                 $remoteAgents = $fineTuner['agents'] ?? [];
@@ -285,8 +287,12 @@
                     </label>
                 </div>
                 <div class="col-12">
-                    <label class="ui-label">First message <span class="opt">optional</span></label>
-                    <textarea name="ai_greeting" class="ui-field" rows="3" required>{{ old('ai_greeting', $firm->ai_greeting) }}</textarea>
+                    <label class="ui-label">First message <span class="req">*</span></label>
+                    <textarea name="ai_greeting" class="ui-field" rows="3" required placeholder="Hello! Thank you for calling…">{{ old('ai_greeting', $firm->ai_greeting ?: ($sessionContext['greeting'] ?? '')) }}</textarea>
+                    <p class="small ui-muted mt-1 mb-0">
+                        Synced to Synthflow as <strong>agent speaks first</strong> (<code>agent_static</code>).
+                        Sync will keep this message — it should not disappear after sync.
+                    </p>
                 </div>
                 <div class="col-md-6">
                     <label class="ui-label">Transfer number</label>

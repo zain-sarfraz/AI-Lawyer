@@ -33,33 +33,47 @@
 
         return (bool) $user?->can($permission);
     };
-    $nav = [
-        ['group' => 'Workspace', 'items' => [
-            ['route' => 'dashboard', 'match' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'grid', 'permission' => null],
-            ['route' => 'schedule.index', 'match' => 'schedule.index', 'label' => 'Calendar', 'icon' => 'calendar', 'permission' => 'schedules.manage|appointments.view'],
-            ['route' => 'schedule.availability', 'match' => 'schedule.availability*', 'label' => 'Availability', 'icon' => 'clock', 'permission' => 'schedules.manage'],
-            ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check', 'permission' => 'appointments.view'],
-        ]],
-        ['group' => 'Firm', 'items' => [
-            ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users', 'permission' => 'clients.view'],
-            ['route' => 'cases.index', 'match' => 'cases.*', 'label' => 'Cases Management', 'icon' => 'scales', 'permission' => 'cases.view'],
-            ['route' => 'case-research.index', 'match' => 'case-research.*', 'label' => 'Cases', 'icon' => 'book-open', 'permission' => 'cases.view', 'lawyer_only' => true],
-            ['route' => 'lawyers.index', 'match' => 'lawyers.*', 'label' => 'Lawyers', 'icon' => 'briefcase', 'permission' => 'lawyers.manage'],
-            ['route' => 'services.index', 'match' => 'services.*', 'label' => 'Services', 'icon' => 'journal', 'permission' => 'services.manage'],
-            ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart', 'permission' => 'reports.view'],
-            ['route' => 'ai.show', 'match' => 'ai.*', 'label' => 'Agent Setting', 'icon' => 'mic', 'permission' => 'ai.settings.manage'],
-            ['route' => 'settings.edit', 'match' => 'settings.*', 'label' => 'Settings', 'icon' => 'gear', 'permission' => 'firm.settings.manage'],
-        ]],
-    ];
-    $isRestrictedLawyer = $user && $user->hasRole('Lawyer') && ! $user->hasAnyRole(['Owner', 'Admin']);
+    $isFirmAdminNav = $user && $user->isFirmAdmin() && $user->firm?->isFirmAccount();
+    $nav = $isFirmAdminNav
+        ? [
+            ['group' => 'Firm Management', 'items' => [
+                ['route' => 'firm.dashboard', 'match' => 'firm.dashboard', 'label' => 'Dashboard', 'icon' => 'grid', 'permission' => null],
+                ['route' => 'firm.lawyers.index', 'match' => 'firm.lawyers.*', 'label' => 'Lawyers', 'icon' => 'users', 'permission' => 'invitations.manage|users.manage'],
+                ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'briefcase', 'permission' => 'clients.view'],
+                ['route' => 'cases.index', 'match' => 'cases.*', 'label' => 'Cases', 'icon' => 'scales', 'permission' => 'cases.view'],
+                ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check', 'permission' => 'appointments.view'],
+                ['route' => 'calls.index', 'match' => 'calls.*', 'label' => 'Calls History', 'icon' => 'phone', 'permission' => 'calls.view'],
+                ['route' => 'ai.show', 'match' => 'ai.*', 'label' => 'AI Receptionist', 'icon' => 'mic', 'permission' => 'ai.settings.manage'],
+                ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart', 'permission' => 'reports.view'],
+            ]],
+            ['group' => 'Settings', 'items' => [
+                ['route' => 'firm.billing', 'match' => 'firm.billing', 'label' => 'Subscription & Billing', 'icon' => 'journal', 'permission' => 'billing.view'],
+                ['route' => 'settings.edit', 'match' => 'settings.*', 'label' => 'Firm Settings', 'icon' => 'gear', 'permission' => 'firm.settings.manage'],
+                ['route' => 'profile.edit', 'match' => 'profile.*', 'label' => 'My Profile', 'icon' => 'shield', 'permission' => null],
+            ]],
+        ]
+        : [
+            ['group' => 'Workspace', 'items' => [
+                ['route' => 'dashboard', 'match' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'grid', 'permission' => null],
+                ['route' => 'schedule.index', 'match' => 'schedule.index', 'label' => 'Calendar', 'icon' => 'calendar', 'permission' => 'schedules.manage|appointments.view'],
+                ['route' => 'schedule.availability', 'match' => 'schedule.availability*', 'label' => 'Availability', 'icon' => 'clock', 'permission' => 'schedules.manage'],
+                ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check', 'permission' => 'appointments.view'],
+            ]],
+            ['group' => 'Firm', 'items' => [
+                ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users', 'permission' => 'clients.view'],
+                ['route' => 'cases.index', 'match' => 'cases.*', 'label' => 'Cases Management', 'icon' => 'scales', 'permission' => 'cases.view'],
+                ['route' => 'case-research.index', 'match' => 'case-research.*', 'label' => 'Cases', 'icon' => 'book-open', 'permission' => 'cases.view', 'lawyer_only' => true],
+                ['route' => 'services.index', 'match' => 'services.*', 'label' => 'Services', 'icon' => 'journal', 'permission' => 'services.manage'],
+                ['route' => 'reports.index', 'match' => 'reports.*', 'label' => 'Reports', 'icon' => 'chart', 'permission' => 'reports.view'],
+                ['route' => 'ai.show', 'match' => 'ai.*', 'label' => 'Agent Setting', 'icon' => 'mic', 'permission' => 'ai.settings.manage'],
+                ['route' => 'settings.edit', 'match' => 'settings.*', 'label' => 'Settings', 'icon' => 'gear', 'permission' => 'firm.settings.manage'],
+            ]],
+        ];
+    $isRestrictedLawyer = $user && $user->hasRole('Lawyer') && ! $user->isFirmAdmin();
     $nav = collect($nav)->map(function (array $section) use ($allows, $isRestrictedLawyer) {
         $section['items'] = collect($section['items'])
             ->filter(function (array $item) use ($allows, $isRestrictedLawyer) {
                 if (! empty($item['lawyer_only']) && ! $isRestrictedLawyer) {
-                    return false;
-                }
-
-                if ($isRestrictedLawyer && in_array($item['route'], ['clients.index', 'lawyers.index', 'services.index', 'ai.show', 'settings.edit'], true)) {
                     return false;
                 }
 
@@ -71,7 +85,7 @@
         return $section;
     })->filter(fn (array $section) => count($section['items']) > 0)->values()->all();
     $initials = collect(explode(' ', $user->name ?? 'U'))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
-    $roleLabel = $user?->getRoleNames()->first() ?: 'Team';
+    $roleLabel = $user?->isFirmAdmin() ? 'Firm Admin' : ($user?->getRoleNames()->first() ?: 'Team');
 @endphp
 
 <div class="flex min-h-screen w-full overflow-x-clip">
@@ -85,7 +99,7 @@
             <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-sm font-extrabold text-white shadow-[0_0_0_3px_rgba(18,138,130,0.28)]">AL</div>
             <div x-show="!collapsed" x-cloak class="min-w-0 flex-1">
                 <div class="font-display text-lg font-semibold leading-none tracking-tight text-white">AI Lawyer</div>
-                <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-gold-400">Legal workspace</div>
+                <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-gold-400">{{ $isFirmAdminNav ? 'Firm admin' : 'Legal workspace' }}</div>
             </div>
             <button
                 type="button"
@@ -196,6 +210,9 @@
             @if(session('success'))
                 <x-ui.alert class="mb-4">{{ session('success') }}</x-ui.alert>
             @endif
+            @if(session('error'))
+                <x-ui.alert tone="danger" class="mb-4">{{ session('error') }}</x-ui.alert>
+            @endif
             @if(isset($errors) && $errors->any())
                 <x-ui.alert tone="danger" class="mb-4">
                     <ul class="list-disc pl-4">
@@ -205,6 +222,23 @@
                     </ul>
                 </x-ui.alert>
             @endif
+
+            @if(isset($pastDueWarning))
+                <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+                    <div class="flex items-center gap-3">
+                        <svg class="h-5 w-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span class="text-sm font-medium">{{ $pastDueWarning }}</span>
+                    </div>
+                    @if(Route::has('firm.billing'))
+                        <a href="{{ route('firm.billing') }}" class="rounded-lg bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/30">Update Billing</a>
+                    @endif
+                </div>
+            @endif
+
+            {{-- Onboarding Checklist section hidden per user request --}}
+            {{-- @include('partials.onboarding-checklist') --}}
 
             @isset($slot)
                 {{ $slot }}

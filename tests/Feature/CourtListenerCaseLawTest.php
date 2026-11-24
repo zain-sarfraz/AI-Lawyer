@@ -332,7 +332,7 @@ class CourtListenerCaseLawTest extends TestCase
 
         $user = $context->run($firm->id, function () use ($firm) {
             $user = User::factory()->create(['firm_id' => $firm->id]);
-            $user->assignRole('Admin');
+            $user->assignRole('Lawyer');
 
             return $user;
         });

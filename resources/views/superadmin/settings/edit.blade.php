@@ -16,7 +16,7 @@
         <x-legal.kpi label="Active firms" :value="$stats['active_firms']" hint="Can sign in" tone="blue" icon="grid" />
     </div>
     <div class="col-6 col-xl">
-        <x-legal.kpi label="Firm admins" :value="$stats['admins']" hint="Owner / Admin" tone="teal" icon="users" />
+        <x-legal.kpi label="Lawyers" :value="$stats['admins']" hint="Lawyer" tone="teal" icon="users" />
     </div>
 </div>
 

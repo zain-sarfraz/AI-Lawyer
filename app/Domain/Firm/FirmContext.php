@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Firm;
 
+use App\Models\Firm;
 use App\Models\Lawyer;
 use App\Models\User;
 
@@ -33,7 +34,7 @@ class FirmContext
     }
 
     /**
-     * Lawyer id when the signed-in user is a Lawyer and not Owner/Admin.
+     * Lawyer id when the signed-in user is a firm Lawyer.
      * Null means the ownership restriction does not apply.
      */
     public function restrictedLawyerId(): ?int
@@ -47,9 +48,10 @@ class FirmContext
 
         if ($this->cachedUserId !== $user->id) {
             $this->cachedUserId = $user->id;
-            $restricted = $user->hasRole('Lawyer') && ! $user->hasAnyRole(['Owner', 'Admin']);
+            // Firm admins see firm-wide data; individual/firm lawyers stay scoped to their seat.
+            $restricted = $user->hasRole('Lawyer') && ! $user->isFirmAdmin();
             $this->restrictedLawyerId = $restricted
-                ? (int) Lawyer::query()->withoutGlobalScope('assigned_lawyer')->where('user_id', $user->id)->value('id')
+                ? (int) Lawyer::withoutGlobalScopes()->where('user_id', $user->id)->value('id')
                 : null;
         }
 
@@ -63,8 +65,22 @@ class FirmContext
         }
 
         $user = auth()->user();
+        if (! $user instanceof User) {
+            return null;
+        }
 
-        return $user instanceof User ? $user->firm_id : null;
+        if ($user->firm_id !== null) {
+            return $user->firm_id;
+        }
+
+        if ($user->isIndividual() || $user->role === 'individual_lawyer') {
+            $firmId = Firm::withoutGlobalScopes()->where('owner_id', $user->id)->value('id');
+            if ($firmId) {
+                return (int) $firmId;
+            }
+        }
+
+        return null;
     }
 
     /**

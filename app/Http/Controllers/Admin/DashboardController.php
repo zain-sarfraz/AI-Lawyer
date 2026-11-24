@@ -12,12 +12,13 @@ use App\Models\Client;
 use App\Models\CrmDocument;
 use App\Models\Lead;
 use App\Models\LegalCase;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(FineTunerService $fineTuner): View
+    public function __invoke(FineTunerService $fineTuner): View|RedirectResponse
     {
         $user = auth()->user()?->loadMissing('firm', 'lawyer');
         $hour = (int) now()->format('G');
@@ -25,7 +26,12 @@ class DashboardController extends Controller
         $firmLabel = $user?->firm?->firm_name ?: 'Firm';
         $firmShort = str($firmLabel)->before(' ')->toString() ?: 'Firm';
 
-        // Lawyer / Staff: personal desk (appointments + records), not the full admin ops board.
+        // Firm admins use the dedicated firm management dashboard.
+        if ($user?->isFirmAdmin() && $user->firm?->isFirmAccount()) {
+            return redirect()->route('firm.dashboard');
+        }
+
+        // Individual / firm lawyers: personal desk — leave this path unchanged.
         if ($user && ! $user->isAdmin()) {
             return $this->teamDashboard($user, $partOfDay, $firmShort);
         }

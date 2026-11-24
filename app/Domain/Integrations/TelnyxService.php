@@ -108,15 +108,37 @@ class TelnyxService
 
     public function normalizeE164(string $phone): ?string
     {
-        $digits = preg_replace('/\D+/', '', $phone);
+        $trimmed = trim($phone);
+        $digits = preg_replace('/\D+/', '', $trimmed);
         if (! is_string($digits) || strlen($digits) < 10) {
             return null;
         }
 
-        if ($phone[0] === '+') {
+        // Already explicit E.164 with +
+        if (str_starts_with($trimmed, '+')) {
+            // Fix leading +0 mistake for Pakistani local numbers (e.g. +03247087907 -> +923247087907)
+            if (str_starts_with($digits, '03') && strlen($digits) === 11) {
+                return '+92'.substr($digits, 1);
+            }
             return '+'.$digits;
         }
 
+        // International dialing prefix 00 (e.g. 0092...)
+        if (str_starts_with($trimmed, '00')) {
+            return '+'.substr($digits, 2);
+        }
+
+        // Pakistan local format: 03xx-xxxxxxx (11 digits starting with 03)
+        if (str_starts_with($digits, '03') && strlen($digits) === 11) {
+            return '+92'.substr($digits, 1);
+        }
+
+        // Pakistan format without leading zero: 923xxxxxxxxx (12 digits)
+        if (str_starts_with($digits, '92') && strlen($digits) === 12) {
+            return '+'.$digits;
+        }
+
+        // US/Canada standard 10 digits
         if (strlen($digits) === 10) {
             return '+1'.$digits;
         }

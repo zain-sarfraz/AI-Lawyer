@@ -22,6 +22,11 @@ class EnsureFirmMember
             return redirect()->route('superadmin.dashboard');
         }
 
+        // Individual accounts have their own individual practice workspace
+        if ($user->isIndividual() || $user->role === 'individual_lawyer') {
+            return $next($request);
+        }
+
         if ($user->firm_id === null) {
             abort(403, 'No firm workspace assigned.');
         }

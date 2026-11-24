@@ -35,6 +35,8 @@ class JurisdictionCaseLawTest extends TestCase
         $this->assertSame('+443247087907', PhoneNormalizer::normalize('GB', '03247087907'));
         $this->assertSame('+447911123456', PhoneNormalizer::normalize('GB', '07911123456'));
         $this->assertSame('+12025550123', PhoneNormalizer::normalize('US', '2025550123'));
+        $this->assertSame('+14165550123', PhoneNormalizer::normalize('CA', '4165550123'));
+        $this->assertSame('+61412345678', PhoneNormalizer::normalize('AU', '0412345678'));
     }
 
     public function test_lawyer_jurisdiction_sync_on_create_and_update(): void
@@ -178,7 +180,7 @@ class JurisdictionCaseLawTest extends TestCase
 
         $user = $context->run($firm->id, function () use ($firm) {
             $user = User::factory()->create(['firm_id' => $firm->id]);
-            $user->assignRole('Admin');
+            $user->assignRole('Lawyer');
 
             return $user;
         });

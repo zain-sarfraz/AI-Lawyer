@@ -11,7 +11,11 @@ class FirmPolicy
 {
     public function view(User $user, Firm $firm): bool
     {
-        return $user->can('firm.settings.manage') && (int) $user->firm_id === (int) $firm->id;
+        $hasPermission = $user->can('firm.settings.manage') || $user->can('ai.settings.manage');
+        $isOwner = (int) $firm->owner_id === (int) $user->id;
+        $isSameFirm = (int) $user->firm_id === (int) $firm->id;
+
+        return $hasPermission && ($isSameFirm || $isOwner);
     }
 
     public function update(User $user, Firm $firm): bool

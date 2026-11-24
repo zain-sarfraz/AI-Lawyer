@@ -17,10 +17,18 @@ use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\SalesInquiryController;
+use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\FirmAdmin\BillingController as FirmBillingController;
+use App\Http\Controllers\FirmAdmin\DashboardController as FirmDashboardController;
+use App\Http\Controllers\FirmAdmin\LawyerController as FirmLawyerController;
+use App\Http\Controllers\InvitationAcceptController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Superadmin\AdminController as SuperadminAdminController;
 use App\Http\Controllers\Superadmin\DashboardController as SuperadminDashboardController;
 use App\Http\Controllers\Superadmin\FirmController as SuperadminFirmController;
+use App\Http\Controllers\Superadmin\LawyerController as SuperadminLawyerController;
 use App\Http\Controllers\Superadmin\ProfileController as SuperadminProfileController;
 use App\Http\Controllers\Superadmin\SettingsController as SuperadminSettingsController;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +43,26 @@ Route::get('/', function () {
     return redirect()->route($user->homeRoute());
 })->name('home');
 
+Route::redirect('/register', '/checkout?plan=starter');
+Route::redirect('/contact', '/#pricing');
+
+Route::get('/checkout', [CheckoutController::class, 'show'])->name('checkout.show')->middleware('throttle:60,1');
+Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store')->middleware('throttle:20,1');
+Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
+Route::get('/checkout/status', [CheckoutController::class, 'status'])->name('checkout.status');
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
+Route::post('/sales-inquiries', [SalesInquiryController::class, 'store'])->name('sales-inquiries.store')->middleware('throttle:10,1');
+
+Route::middleware('auth')->group(function () {
+    Route::post('/onboarding/step', [OnboardingController::class, 'toggleStep'])->name('onboarding.step');
+    Route::post('/onboarding/dismiss', [OnboardingController::class, 'dismiss'])->name('onboarding.dismiss');
+});
+
+Route::middleware('guest')->group(function () {
+    Route::get('/invitations/{token}', [InvitationAcceptController::class, 'show'])->name('invitations.accept.show');
+    Route::post('/invitations/{token}', [InvitationAcceptController::class, 'store'])->name('invitations.accept.store');
+});
+
 Route::middleware(['auth', 'verified', 'active', 'superadmin'])->prefix('superadmin')->name('superadmin.')->group(function () {
     Route::get('/', SuperadminDashboardController::class)->name('dashboard');
     Route::get('firms', [SuperadminFirmController::class, 'index'])->name('firms.index');
@@ -45,11 +73,10 @@ Route::middleware(['auth', 'verified', 'active', 'superadmin'])->prefix('superad
     Route::patch('firms/{firm}/status', [SuperadminFirmController::class, 'updateStatus'])->name('firms.status');
     Route::delete('firms/{firm}', [SuperadminFirmController::class, 'destroy'])->name('firms.destroy');
 
-    Route::get('admins', [SuperadminAdminController::class, 'index'])->name('admins.index');
-    Route::get('admins/create', [SuperadminAdminController::class, 'create'])->name('admins.create');
-    Route::post('admins', [SuperadminAdminController::class, 'store'])->name('admins.store');
-    Route::put('admins/{admin}', [SuperadminAdminController::class, 'update'])->name('admins.update');
-    Route::delete('admins/{admin}', [SuperadminAdminController::class, 'destroy'])->name('admins.destroy');
+    Route::get('lawyers', [SuperadminLawyerController::class, 'index'])->name('lawyers.index');
+    Route::post('lawyers', [SuperadminLawyerController::class, 'store'])->name('lawyers.store');
+    Route::put('lawyers/{lawyer}', [SuperadminLawyerController::class, 'update'])->name('lawyers.update');
+    Route::delete('lawyers/{lawyer}', [SuperadminLawyerController::class, 'destroy'])->name('lawyers.destroy');
 
     Route::get('settings', [SuperadminSettingsController::class, 'edit'])->name('settings.edit');
     Route::put('settings', [SuperadminSettingsController::class, 'update'])->name('settings.update');
@@ -57,6 +84,16 @@ Route::middleware(['auth', 'verified', 'active', 'superadmin'])->prefix('superad
     Route::get('profile', [SuperadminProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('profile', [SuperadminProfileController::class, 'update'])->name('profile.update');
     Route::put('profile/password', [SuperadminProfileController::class, 'updatePassword'])->name('profile.password');
+});
+
+Route::middleware(['auth', 'verified', 'active', 'firm', 'firm.admin'])->prefix('firm')->name('firm.')->group(function () {
+    Route::get('/', FirmDashboardController::class)->name('dashboard');
+    Route::get('/lawyers', [FirmLawyerController::class, 'index'])->name('lawyers.index');
+    Route::post('/lawyers', [FirmLawyerController::class, 'store'])->name('lawyers.store');
+    Route::get('/lawyers/{user}', [FirmLawyerController::class, 'show'])->name('lawyers.show');
+    Route::put('/lawyers/{user}', [FirmLawyerController::class, 'update'])->name('lawyers.update');
+    Route::patch('/lawyers/{user}/status', [FirmLawyerController::class, 'updateStatus'])->name('lawyers.status');
+    Route::get('/billing', FirmBillingController::class)->name('billing');
 });
 
 Route::middleware(['auth', 'verified', 'active', 'firm'])->group(function () {

@@ -21,14 +21,15 @@ class Firm extends Model
     protected $table = 'firms';
 
     protected $fillable = [
-        'firm_name', 'legal_name', 'timezone', 'currency', 'address', 'phone', 'email',
+        'name', 'owner_id', 'firm_name', 'legal_name', 'timezone', 'currency', 'address', 'phone', 'email',
         'website', 'logo_path', 'favicon_path', 'primary_color', 'receptionist_name',
         'email_footer', 'slot_interval_minutes', 'default_duration_minutes', 'buffer_minutes',
         'booking_horizon_days', 'cancellation_window_hours', 'min_notice_minutes',
         'buffer_before_minutes', 'public_booking_status', 'slug', 'ai_greeting', 'ai_tone',
         'ai_language', 'ai_voice', 'ai_allowed_topics', 'ai_escalation_rules', 'ai_system_prompt',
         'twilio_phone_number', 'transfer_number', 'after_hours_behavior', 'recording_enabled',
-        'status',
+        'status', 'account_type', 'plan', 'billing_interval', 'subscription_status', 'max_lawyers',
+        'stripe_customer_id', 'stripe_subscription_id', 'stripe_payment_intent_id', 'subscribed_at',
     ];
 
     protected function casts(): array
@@ -42,6 +43,8 @@ class Firm extends Model
             'cancellation_window_hours' => 'integer',
             'min_notice_minutes' => 'integer',
             'buffer_before_minutes' => 'integer',
+            'max_lawyers' => 'integer',
+            'subscribed_at' => 'datetime',
         ];
     }
 
@@ -50,14 +53,81 @@ class Firm extends Model
         return ($this->status ?? 'active') === 'active';
     }
 
+    public function isIndividualAccount(): bool
+    {
+        return ($this->account_type ?? 'firm') === 'individual' || ($this->plan ?? null) === 'starter';
+    }
+
+    public function isFirmAccount(): bool
+    {
+        return ! $this->isIndividualAccount();
+    }
+
+    public function allowsMultipleLawyers(): bool
+    {
+        $max = $this->resolvedMaxLawyers();
+
+        return $max === null;
+    }
+
+    public function resolvedMaxLawyers(): ?int
+    {
+        if ($this->max_lawyers !== null) {
+            return (int) $this->max_lawyers;
+        }
+
+        if (($this->plan ?? null) === 'starter' || ($this->account_type ?? null) === 'individual') {
+            return 1;
+        }
+
+        return null;
+    }
+
+    public function lawyerCount(): int
+    {
+        return Lawyer::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $this->id)
+            ->where('status', 'active')
+            ->count();
+    }
+
+    public function canAddLawyer(): bool
+    {
+        $max = $this->resolvedMaxLawyers();
+        if ($max === null) {
+            return true;
+        }
+
+        return $this->lawyerCount() < $max;
+    }
+
+    public function owner(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function subscription(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
     protected static function booted(): void
     {
+        static::saving(function (Firm $firm): void {
+            if (! empty($firm->name) && empty($firm->firm_name)) {
+                $firm->firm_name = $firm->name;
+            } elseif (! empty($firm->firm_name) && empty($firm->name)) {
+                $firm->name = $firm->firm_name;
+            }
+        });
+
         static::creating(function (Firm $firm): void {
             if (! empty($firm->slug)) {
                 return;
             }
 
-            $base = Str::slug((string) $firm->firm_name) ?: 'firm';
+            $base = Str::slug((string) ($firm->firm_name ?: $firm->name)) ?: 'firm';
             $slug = $base;
             $suffix = 2;
             while (static::query()->where('slug', $slug)->exists()) {

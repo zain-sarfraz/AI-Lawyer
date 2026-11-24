@@ -10,8 +10,9 @@ use Illuminate\Console\Command;
 class FetchCasesCommand extends Command
 {
     protected $signature = 'cases:fetch
-        {jurisdiction_code : e.g. US-FED, PK-SD, GB-EAW}
+        {jurisdiction_code : e.g. US-FED, PK-SD, GB-EAW, AU-FED}
         {--limit= : Max opinions to upsert (default from config; US-FED default 2000)}
+        {--all : Fetch every available result with no fixed limit}
         {--court= : CourtListener court id (default scotus for US)}
         {--from= : filed_after YYYY-MM-DD}
         {--to= : filed_before YYYY-MM-DD}
@@ -26,9 +27,14 @@ class FetchCasesCommand extends Command
         $code = strtoupper((string) $this->argument('jurisdiction_code'));
         $isUs = str_starts_with($code, 'US-');
         $limitOpt = $this->option('limit');
-        $limit = $limitOpt !== null && $limitOpt !== ''
-            ? max(1, (int) $limitOpt)
-            : ($isUs ? 2000 : (int) config('case_law.fetch.max_requests_per_run', 25));
+        if ($this->option('all')) {
+            // 0 = unlimited inside FetchCasesForJurisdictionJob / adapters.
+            $limit = 0;
+        } elseif ($limitOpt !== null && $limitOpt !== '') {
+            $limit = max(1, (int) $limitOpt);
+        } else {
+            $limit = $isUs ? 2000 : (int) config('case_law.fetch.max_requests_per_run', 25);
+        }
 
         if (! Jurisdiction::query()->where('code', $code)->exists()) {
             $this->error("Unknown jurisdiction code: {$code}");
@@ -56,8 +62,11 @@ class FetchCasesCommand extends Command
         $before = CaseLawRecord::query()->whereHas('jurisdiction', fn ($q) => $q->where('code', $code))->count();
 
         $job = new FetchCasesForJurisdictionJob($code, $limit, $options);
-        if ($this->option('sync') || $isUs) {
-            // US runs sync by default so the artisan summary is accurate.
+        $limitLabel = $limit <= 0 ? 'all' : (string) $limit;
+        $runSync = $this->option('sync') || $isUs || $this->option('all');
+
+        if ($runSync) {
+            // Sync for US / --all so the artisan summary reflects the full upsert.
             try {
                 dispatch_sync($job);
             } catch (\Throwable $e) {
@@ -67,14 +76,14 @@ class FetchCasesCommand extends Command
             }
             $after = CaseLawRecord::query()->whereHas('jurisdiction', fn ($q) => $q->where('code', $code))->count();
             $j = Jurisdiction::query()->where('code', $code)->first();
-            $this->info("Fetched (sync) for {$code} (limit {$limit}).");
+            $this->info("Fetched (sync) for {$code} (limit {$limitLabel}).");
             $this->line('  Options: '.json_encode($options));
             $this->line('  Net new rows: '.max(0, $after - $before));
             $this->line('  Status: '.($j?->last_case_fetch_status ?? 'n/a'));
             $this->line('  Message: '.($j?->last_case_fetch_message ?? ''));
         } else {
             dispatch($job);
-            $this->info("Queued FetchCasesForJurisdictionJob for {$code} (limit {$limit}).");
+            $this->info("Queued FetchCasesForJurisdictionJob for {$code} (limit {$limitLabel}).");
         }
 
         return self::SUCCESS;

@@ -1,6 +1,5 @@
 @php
     $modalName = 'edit-user-'.$user->id;
-    $roleName = $user->hasRole('Lawyer') ? 'Lawyer' : ($user->hasRole('Staff') ? 'Staff' : 'Lawyer');
     $statusValue = $user->status?->value ?? 'active';
 @endphp
 
@@ -15,11 +14,11 @@
         method="POST"
         action="{{ route('users.update', $user) }}"
         class="space-y-4"
-        x-data="{ role: @js(old('_modal') === $modalName ? old('role', $roleName) : $roleName) }"
     >
         @csrf
         @method('PUT')
         <input type="hidden" name="_modal" value="{{ $modalName }}">
+        <input type="hidden" name="role" value="Lawyer">
 
         <div class="row g-3">
             <div class="col-12 col-md-6">
@@ -31,11 +30,8 @@
                 <input class="ui-field" type="email" name="email" value="{{ old('_modal') === $modalName ? old('email', $user->email) : $user->email }}" required>
             </div>
             <div class="col-12 col-md-6">
-                <label class="ui-label">Role *</label>
-                <select class="ui-field" name="role" x-model="role" required>
-                    <option value="Lawyer">Lawyer</option>
-                    <option value="Staff">Staff</option>
-                </select>
+                <label class="ui-label">Role</label>
+                <input class="ui-field" value="Lawyer" disabled>
             </div>
             <div class="col-12 col-md-6">
                 <label class="ui-label">Status</label>
@@ -45,11 +41,11 @@
                     <option value="suspended" @selected((old('_modal') === $modalName ? old('status', $statusValue) : $statusValue) === 'suspended')>Suspended</option>
                 </select>
             </div>
-            <div class="col-12 col-md-6" x-show="role === 'Lawyer'" x-cloak>
+            <div class="col-12 col-md-6">
                 <label class="ui-label">Title</label>
                 <input class="ui-field" name="title" value="{{ old('_modal') === $modalName ? old('title', $user->lawyer?->title) : $user->lawyer?->title }}" placeholder="Associate, Partner…">
             </div>
-            <div class="col-12 col-md-6" x-show="role === 'Lawyer'" x-cloak>
+            <div class="col-12 col-md-6">
                 <label class="ui-label">Phone</label>
                 <input class="ui-field" name="phone" value="{{ old('_modal') === $modalName ? old('phone', $user->lawyer?->phone) : $user->lawyer?->phone }}" placeholder="+1 (555) 000-0000">
             </div>

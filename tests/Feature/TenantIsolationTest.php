@@ -29,7 +29,7 @@ class TenantIsolationTest extends TestCase
         $firmB = Firm::factory()->create(['firm_name' => 'Firm B']);
 
         $userA = User::factory()->create(['firm_id' => $firmA->id, 'email' => 'owner-a@example.com']);
-        $userA->assignRole('Admin');
+        $userA->assignRole('Lawyer');
 
         $leadB = app(FirmContext::class)->run($firmB->id, function () {
             return Lead::query()->create([
