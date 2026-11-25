@@ -8,7 +8,7 @@
 
             return [
                 'id' => $appt->id,
-                'when' => $appt->start_at?->format('M j, Y g:i A') ?: '—',
+                'when' => $appt->localStartAt()?->format('M j, Y g:i A') ?: '—',
                 'service' => $appt->service?->name,
                 'status' => str_replace('_', ' ', $status),
                 'can_act' => in_array($status, ['pending', 'confirmed'], true),

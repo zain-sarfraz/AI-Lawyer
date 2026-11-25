@@ -249,33 +249,6 @@
         border-color: #D4AF37;
     }
 
-    .sa-view-toggle {
-        display: inline-flex;
-        background: #F1ECE3;
-        border-radius: 10px;
-        padding: 3px;
-        gap: 3px;
-    }
-
-    .sa-view-btn {
-        width: 30px;
-        height: 30px;
-        border-radius: 7px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 0;
-        background: transparent;
-        color: #64748B;
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-
-    .sa-view-btn.active {
-        background: #0C0F17;
-        color: #FFFFFF;
-    }
-
     /* Lawyers Table */
     .sa-lawyers-table {
         width: 100%;
@@ -662,22 +635,6 @@
                         <option value="inactive" {{ in_array(request('status'), ['inactive', 'suspended']) ? 'selected' : '' }}>Inactive</option>
                     </select>
                 </form>
-
-                <!-- Grid/List View Toggle -->
-                <div class="sa-view-toggle">
-                    <button type="button" class="sa-view-btn active" title="Grid View">
-                        <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                            <rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                        </svg>
-                    </button>
-                    <button type="button" class="sa-view-btn" title="List View">
-                        <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                        </svg>
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -704,7 +661,7 @@
                             $statusStr = $lawyer->status instanceof \App\Enums\EntityStatus ? $lawyer->status->value : (string) ($lawyer->status ?? 'active');
                             $isActive = $statusStr === 'active';
                             $rowNum = ($lawyers->currentPage() - 1) * $lawyers->perPage() + $index + 1;
-                            $isIndiv = ($lawyer->user?->account_type === 'individual') || ($lawyer->user?->role === 'individual_lawyer') || ($lawyer->firm_id === null);
+                            $isIndiv = ($lawyer->user?->isIndividual() ?? false) || ($lawyer->firm?->isIndividualAccount() ?? false) || ($lawyer->firm_id === null);
                         @endphp
                         <tr>
                             <td style="color: #64748B; font-weight: 600;">{{ $rowNum }}</td>
@@ -729,7 +686,13 @@
                                 @endif
                             </td>
                             <td style="color: #475569; font-weight: 500;">
-                                {{ $lawyer->firm?->firm_name ?: ($isIndiv ? 'Individual Practice' : '—') }}
+                                @if($isIndiv)
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #EEF2FF; color: #3730A3;">
+                                        Individual
+                                    </span>
+                                @else
+                                    {{ $lawyer->firm?->firm_name ?: '—' }}
+                                @endif
                             </td>
                             <td style="color: #64748B;">{{ $lawyer->experience ?: ($loop->iteration * 2 + 3 . ' years') }}</td>
                             <td>

@@ -104,7 +104,7 @@
                 @endphp
                 <div class="legal-list-item">
                     <div>
-                        <div class="fw-semibold">{{ $appt->start_at?->format('g:i A') }} · {{ $appt->lead?->name ?: $appt->lead?->phone ?: 'Caller' }}</div>
+                        <div class="fw-semibold">{{ $appt->localStartAt()?->format('g:i A') }} · {{ $appt->lead?->name ?: $appt->lead?->phone ?: 'Caller' }}</div>
                         <div class="small ui-muted">{{ $appt->service?->name }} · {{ $appt->lawyer?->displayName() }}</div>
                     </div>
                     <x-legal.badge :tone="$tone">

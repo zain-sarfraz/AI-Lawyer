@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Domain\Billing\PlanCatalog;
+use App\Support\Phone\PhoneNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -34,7 +35,10 @@ class CheckoutRequest extends FormRequest
             'email' => ['required', 'email', 'max:255'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'firm_name' => [$isFirmPlan ? 'required' : 'nullable', 'string', 'max:255'],
+            'country' => ['nullable', 'string', Rule::in(PhoneNormalizer::supportedCountries())],
             'phone' => ['nullable', 'string', 'max:50'],
+            'jurisdiction_ids' => ['nullable', 'array'],
+            'jurisdiction_ids.*' => ['integer', 'distinct', 'exists:jurisdictions,id'],
             'accept_terms' => ['accepted'],
             'idempotency_key' => ['nullable', 'string', 'max:100'],
         ];

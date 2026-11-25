@@ -40,4 +40,25 @@ class Jurisdiction extends Model
     {
         return $query->where('is_active', true);
     }
+
+    /** @return array<string, list<array{id:int,code:string,name:string}>> */
+    public static function activeGroupedByCountry(): array
+    {
+        $grouped = [];
+
+        static::query()
+            ->active()
+            ->orderBy('country_code')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'country_code'])
+            ->each(function (self $j) use (&$grouped): void {
+                $grouped[$j->country_code][] = [
+                    'id' => (int) $j->id,
+                    'code' => $j->code,
+                    'name' => $j->name,
+                ];
+            });
+
+        return $grouped;
+    }
 }

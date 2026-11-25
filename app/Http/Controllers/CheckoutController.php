@@ -6,11 +6,15 @@ namespace App\Http\Controllers;
 
 use App\Domain\Billing\PlanCatalog;
 use App\Domain\Billing\StripePaymentService;
+use App\Domain\Lawyers\LawyerService;
 use App\Enums\UserStatus;
 use App\Http\Requests\CheckoutRequest;
 use App\Models\Firm;
+use App\Models\Jurisdiction;
+use App\Models\Lawyer;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Support\Phone\PhoneNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +30,7 @@ class CheckoutController extends Controller
     public function __construct(
         private readonly PlanCatalog $plans,
         private readonly StripePaymentService $stripe,
+        private readonly LawyerService $lawyers,
     ) {}
 
     public function show(Request $request): View|RedirectResponse
@@ -59,6 +64,8 @@ class CheckoutController extends Controller
             'idempotencyKey' => (string) Str::uuid(),
             'resume' => (bool) $request->query('resume', false),
             'pendingEmail' => $request->query('email'),
+            'activeJurisdictions' => Jurisdiction::activeGroupedByCountry(),
+            'countryLabels' => PhoneNormalizer::countryLabels(),
         ]);
     }
 
@@ -109,8 +116,27 @@ class CheckoutController extends Controller
             $firm = $user->firm;
         } else {
             // New user registration
+            $rawCountry = strtoupper(trim((string) ($data['country'] ?? '')));
+            $preferredCountry = in_array($rawCountry, PhoneNormalizer::supportedCountries(), true) ? $rawCountry : null;
+            $preferredPhone = trim((string) ($data['phone'] ?? '')) ?: null;
+            if ($preferredPhone !== null && $preferredCountry !== null && ! str_starts_with($preferredPhone, '+')) {
+                try {
+                    $normalized = PhoneNormalizer::normalize($preferredCountry, $preferredPhone);
+                    if ($normalized !== '') {
+                        $preferredPhone = $normalized;
+                    }
+                } catch (\InvalidArgumentException) {
+                    // Keep entered phone as-is when checkout optional phone does not match strict local length
+                }
+            }
+            $onboardingPrefs = [
+                'preferred_country' => $preferredCountry,
+                'preferred_phone' => $preferredPhone,
+                'preferred_jurisdiction_ids' => array_values(array_map('intval', $data['jurisdiction_ids'] ?? [])),
+            ];
+
             try {
-                [$user, $firm] = DB::transaction(function () use ($data, $summary, $email, $planId, $interval) {
+                [$user, $firm] = DB::transaction(function () use ($data, $summary, $email, $planId, $interval, $onboardingPrefs, $preferredPhone) {
                     if ($summary['account_type'] === 'individual') {
                         $user = User::create([
                             'account_type' => 'individual',
@@ -121,6 +147,7 @@ class CheckoutController extends Controller
                             'password' => Hash::make($data['password']),
                             'pending_plan' => $planId,
                             'pending_interval' => $interval,
+                            'onboarding' => $onboardingPrefs,
                         ]);
 
                         $user->assignRole('Lawyer');
@@ -142,7 +169,7 @@ class CheckoutController extends Controller
                         'plan' => $planId,
                         'billing_interval' => $interval,
                         'subscription_status' => 'incomplete',
-                        'phone' => $data['phone'] ?? null,
+                        'phone' => $preferredPhone,
                         'email' => $email,
                     ]);
 
@@ -156,6 +183,7 @@ class CheckoutController extends Controller
                         'password' => Hash::make($data['password']),
                         'pending_plan' => $planId,
                         'pending_interval' => $interval,
+                        'onboarding' => $onboardingPrefs,
                     ]);
 
                     $firm->owner_id = $user->id;
@@ -248,36 +276,7 @@ class CheckoutController extends Controller
 
         // Auto-confirm in mock/dummy mode
         if (! $subscription->isActive() && ($request->query('mock') || str_starts_with($sessionId, 'cs_mock_') || $this->stripe->isDummyMode())) {
-            $subscription->status = 'active';
-            $subscription->stripe_subscription_id = 'sub_mock_' . substr(md5($sessionId), 0, 14);
-            $subscription->current_period_end = now()->addMonth();
-            $subscription->save();
-
-            $user = $subscription->user;
-            if ($user) {
-                $user->status = UserStatus::Active;
-                $user->save();
-
-                if ($user->isIndividual() || $user->role === 'individual_lawyer') {
-                    Lawyer::withoutGlobalScopes()->firstOrCreate(
-                        ['user_id' => $user->id],
-                        [
-                            'firm_id' => $user->firm_id,
-                            'title' => 'Individual Lawyer',
-                            'status' => 'active',
-                            'country' => 'US',
-                            'specialties' => [],
-                        ]
-                    );
-                }
-            }
-
-            $firm = $subscription->firm;
-            if ($firm) {
-                $firm->status = 'active';
-                $firm->subscription_status = 'active';
-                $firm->save();
-            }
+            $this->confirmMockSubscription($subscription, $sessionId);
         }
 
         if ($subscription->isActive()) {
@@ -315,7 +314,7 @@ class CheckoutController extends Controller
             return response()->json(['status' => 'failed', 'message' => 'Missing session_id'], 400);
         }
 
-        $subscription = Subscription::with('user')
+        $subscription = Subscription::with(['user', 'firm'])
             ->where('stripe_checkout_session_id', $sessionId)
             ->first();
 
@@ -325,36 +324,7 @@ class CheckoutController extends Controller
 
         // Auto-confirm in mock/dummy mode
         if (! $subscription->isActive() && ($request->query('mock') || str_starts_with($sessionId, 'cs_mock_') || $this->stripe->isDummyMode())) {
-            $subscription->status = 'active';
-            $subscription->stripe_subscription_id = 'sub_mock_' . substr(md5($sessionId), 0, 14);
-            $subscription->current_period_end = now()->addMonth();
-            $subscription->save();
-
-            $user = $subscription->user;
-            if ($user) {
-                $user->status = UserStatus::Active;
-                $user->save();
-
-                if ($user->isIndividual() || $user->role === 'individual_lawyer') {
-                    Lawyer::withoutGlobalScopes()->firstOrCreate(
-                        ['user_id' => $user->id],
-                        [
-                            'firm_id' => $user->firm_id,
-                            'title' => 'Individual Lawyer',
-                            'status' => 'active',
-                            'country' => 'US',
-                            'specialties' => [],
-                        ]
-                    );
-                }
-            }
-
-            $firm = $subscription->firm;
-            if ($firm) {
-                $firm->status = 'active';
-                $firm->subscription_status = 'active';
-                $firm->save();
-            }
+            $this->confirmMockSubscription($subscription, $sessionId);
         }
 
         if ($subscription->isActive()) {
@@ -374,5 +344,36 @@ class CheckoutController extends Controller
         }
 
         return response()->json(['status' => 'failed', 'message' => 'Payment failed or cancelled']);
+    }
+
+    private function confirmMockSubscription(Subscription $subscription, string $sessionId): void
+    {
+        $subscription->status = 'active';
+        $subscription->stripe_subscription_id = 'sub_mock_' . substr(md5($sessionId), 0, 14);
+        $subscription->current_period_end = now()->addMonth();
+        $subscription->save();
+
+        $user = $subscription->user;
+        if ($user) {
+            $user->status = UserStatus::Active;
+            $user->email_verified_at ??= now();
+            $user->pending_plan = null;
+            $user->pending_interval = null;
+            $user->save();
+
+            if ($user->isIndividual() || $user->role === 'individual_lawyer') {
+                $this->lawyers->provisionForActivatedUser($user, $user->firm_id, 'Individual Lawyer');
+            } elseif ($user->isFirmAdmin()) {
+                $this->lawyers->provisionForActivatedUser($user, $user->firm_id, 'Firm Admin');
+            }
+        }
+
+        $firm = $subscription->firm;
+        if ($firm) {
+            $firm->status = 'active';
+            $firm->subscription_status = 'active';
+            $firm->subscribed_at = $firm->subscribed_at ?? now();
+            $firm->save();
+        }
     }
 }

@@ -74,7 +74,7 @@
                     <tbody>
                     @forelse($client->appointments as $appt)
                         <tr>
-                            <td class="fw-semibold">{{ $appt->start_at }}</td>
+                            <td class="fw-semibold">{{ $appt->localStartAt()?->format('M j, Y · g:i A') ?: '—' }}</td>
                             <td>{{ $appt->service?->name ?: '—' }}</td>
                             <td><x-legal.badge tone="navy">{{ $appt->status?->value }}</x-legal.badge></td>
                         </tr>

@@ -14,6 +14,9 @@
     $initials = $initials !== '' ? strtoupper($initials) : 'F';
     $adminCount = $admins->count();
     $lawyerCount = $admins->filter(fn ($u) => $u->hasRole('Lawyer'))->count();
+    $indivUser = $admins->first(fn ($u) => $u->isIndividual());
+    $isIndiv = $firm->isIndividualAccount() || $indivUser !== null;
+    $heroName = $isIndiv ? ($indivUser?->name ?: ($firm->owner?->name ?: $firm->firm_name)) : $firm->firm_name;
 @endphp
 
 <div class="sa-firm-show">
@@ -28,9 +31,12 @@
         <div class="sa-firm-hero-main">
             <div class="sa-firm-avatar" aria-hidden="true">{{ $initials }}</div>
             <div class="min-w-0">
-                <div class="sa-firm-kicker">Firm workspace</div>
+                <div class="sa-firm-kicker">{{ $isIndiv ? 'Individual Lawyer' : 'Firm workspace' }}</div>
                 <div class="d-flex flex-wrap align-items-center gap-2">
-                    <h1 class="sa-firm-title">{{ $firm->firm_name }}</h1>
+                    <h1 class="sa-firm-title">{{ $heroName }}</h1>
+                    @if($isIndiv)
+                        <span class="sa-firm-status" style="background: #EEF2FF; color: #3730A3;">Individual</span>
+                    @endif
                     <span class="sa-firm-status {{ $isActive ? 'is-active' : 'is-suspended' }}">
                         {{ $isActive ? 'Active' : 'Suspended' }}
                     </span>
@@ -161,7 +167,7 @@
                 <div class="sa-firm-people">
                     @forelse($admins as $admin)
                         @php
-                            $rolesLabel = $admin->getRoleNames()->join(', ') ?: 'Lawyer';
+                            $rolesLabel = $admin->displayRoleLabel();
                             $userInitials = collect(preg_split('/\s+/', trim((string) $admin->name)) ?: [])
                                 ->filter()
                                 ->map(fn ($p) => mb_substr($p, 0, 1))

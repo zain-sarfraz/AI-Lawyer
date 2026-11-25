@@ -4,7 +4,7 @@
 @php
     $connected = (bool) ($fineTuner['connected'] ?? false);
     $hasAgent = filled($agentId);
-    $promptValue = old('ai_system_prompt', $firm->ai_system_prompt ?: $defaultSystemPrompt);
+    $promptValue = old('ai_system_prompt', $firm->ai_system_prompt ?? '');
     $phone = $assignedPhone ?: ($fineTunerSettings['phone_number'] ?? null);
 @endphp
 
@@ -57,7 +57,7 @@
             </div>
             <div class="sf-meta-lines">
                 <div><span>Telnyx / phone number</span><strong>{{ $phone ?: 'Not assigned' }}</strong></div>
-                <div><span>Synthflow agent</span><strong class="mono">{{ $agentId ?: 'Not created' }}</strong></div>
+                <div><span>Synthflow agent</span><strong class="mono">{{ $agentId ?: 'Not attached' }}</strong></div>
                 <div>
                     <span>Last synced</span>
                     <strong>
@@ -130,83 +130,6 @@
         </div>
 
         <div class="sf-step">
-            <h4>2. Use your Synthflow agent</h4>
-            <p class="small ui-muted mb-3">
-                Attach your existing Synthflow inbound agent
-                @if($preferredAgentName)<strong>{{ $preferredAgentName }}</strong>@endif
-                @if($preferredAgentPhone) on <strong>{{ $preferredAgentPhone }}</strong>@endif.
-                Firm Admin and Individual Lawyer workspaces each store their own connection under their firm,
-                then sync greeting, services, lawyers, and booking tools to that one agent.
-                Use <strong>Use this agent</strong> — do not create a second agent unless you need one.
-            </p>
-            @php
-                $remoteAgents = $fineTuner['agents'] ?? [];
-                $preferredId = $agentId;
-                if (! $preferredId) {
-                    $needle = strtolower($preferredAgentName);
-                    $phoneDigits = preg_replace('/\D+/', '', $preferredAgentPhone) ?? '';
-                    foreach ($remoteAgents as $remoteAgent) {
-                        $agentPhone = preg_replace('/\D+/', '', (string) ($remoteAgent['phone_number'] ?? '')) ?? '';
-                        $nameHit = $needle !== '' && str_contains(strtolower((string) ($remoteAgent['name'] ?? '')), $needle);
-                        $phoneHit = $phoneDigits !== '' && $agentPhone !== '' && str_ends_with($agentPhone, $phoneDigits);
-                        if ($nameHit || $phoneHit) {
-                            $preferredId = $remoteAgent['id'];
-                            break;
-                        }
-                    }
-                }
-            @endphp
-            @if($connected && count($remoteAgents))
-                <form method="POST" action="{{ route('ai.synthflow.assign') }}" class="row g-2 align-items-end mb-3">
-                    @csrf
-                    <div class="col-md-6">
-                        <label class="ui-label">Synthflow agent</label>
-                        <select name="model_id" class="ui-field" required>
-                            @foreach($remoteAgents as $remoteAgent)
-                                <option value="{{ $remoteAgent['id'] }}" @selected((string) $preferredId === (string) $remoteAgent['id'])>
-                                    {{ $remoteAgent['name'] }}{{ filled($remoteAgent['phone_number'] ?? null) ? ' · '.$remoteAgent['phone_number'] : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="ui-label">Phone</label>
-                        <input name="phone_number" class="ui-field" value="{{ old('phone_number', $phone ?: $preferredAgentPhone) }}" required>
-                    </div>
-                    <div class="col-md-3">
-                        <button class="ui-btn ui-btn-primary">Use this agent</button>
-                    </div>
-                </form>
-            @elseif($connected)
-                <form method="POST" action="{{ route('ai.synthflow.assign') }}" class="row g-2 align-items-end mb-3">
-                    @csrf
-                    <div class="col-md-6">
-                        <label class="ui-label">Existing agent ID</label>
-                        <input name="model_id" class="ui-field" value="{{ old('model_id', $agentId) }}" placeholder="e01b…630d" required>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="ui-label">Phone</label>
-                        <input name="phone_number" class="ui-field" value="{{ old('phone_number', $phone ?: $preferredAgentPhone) }}" required>
-                    </div>
-                    <div class="col-md-3">
-                        <button class="ui-btn ui-btn-primary">Use this agent</button>
-                    </div>
-                </form>
-            @else
-                <p class="small ui-muted mb-3">Connect the workspace below with the API key and workspace ID from Synthflow Settings. The app will attach {{ $preferredAgentName }}.</p>
-            @endif
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                <form method="POST" action="{{ route('ai.synthflow.sync') }}">
-                    @csrf
-                    <button class="ui-btn ui-btn-brass" @if(! $hasAgent) disabled @endif>Sync services &amp; lawyers</button>
-                </form>
-                <form method="POST" action="{{ route('ai.synthflow.create-agent') }}">
-                    @csrf
-                    <input type="hidden" name="name" value="{{ $preferredAgentName }}">
-                    <button class="ui-btn ui-btn-ghost" @if(! $connected) disabled @endif>Create a new agent instead</button>
-                </form>
-            </div>
-
             <label class="ui-label">Post-call webhook (configured on the agent automatically)</label>
             <code class="sf-webhook">{{ $fineTunerWebhooks['post_call'] }}</code>
             <p class="small ui-muted mt-2 mb-0">
@@ -244,13 +167,13 @@
     </section>
 
     {{-- AI agent (Synthflow) --}}
-    <section class="agent-card" x-data="{ prompt: @js($promptValue), defaults: @js($defaultSystemPrompt) }">
+    <section class="agent-card">
         <div class="agent-card-head">
             <div>
                 <h3>AI agent (Synthflow)</h3>
-                <p>Voice, language, and prompts. Sync services after you change catalog so callers get accurate fees.</p>
+                <p>Voice, language, and greeting. Sync services after you change catalog so callers get accurate fees.</p>
             </div>
-            <span class="agent-prompt-badge" x-text="prompt.trim() === defaults.trim() ? 'Using default prompt' : 'Custom prompt'"></span>
+            <span class="agent-prompt-badge">{{ filled($promptValue) ? 'Custom prompt' : 'Standard template' }}</span>
         </div>
 
         <form id="ai-agent-form" method="POST" action="{{ route('ai.update') }}">
@@ -259,61 +182,38 @@
             <input type="hidden" name="sync_now" value="1">
             <input type="hidden" name="ai_tone" value="{{ $firm->ai_tone ?: 'Professional' }}">
             <input type="hidden" name="after_hours_behavior" value="{{ $firm->after_hours_behavior ?: 'callback' }}">
-            <input type="hidden" name="receptionist_name" value="{{ $firm->receptionist_name ?: 'Virtual Receptionist' }}">
 
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="ui-label">Language</label>
-                    <select name="ai_language" class="ui-field" required>
-                        @foreach([
-                            'en' => 'English (US / UK / Global)',
-                            'ur' => 'Urdu',
-                            'en-ur' => 'English + Urdu',
-                            'ar' => 'Arabic',
-                            'hi' => 'Hindi',
-                        ] as $code => $label)
-                            <option value="{{ $code }}" @selected(old('ai_language', $firm->ai_language ?: 'en') === $code)>{{ $label }}</option>
-                        @endforeach
-                    </select>
+                    <label class="ui-label">Receptionist name</label>
+                    <input name="receptionist_name" class="ui-field" value="{{ old('receptionist_name', $firm->receptionist_name) }}" placeholder="e.g. Sarah">
                 </div>
                 <div class="col-md-4">
-                    <label class="ui-label">Voice ID <span class="opt">optional</span></label>
-                    <input name="ai_voice" class="ui-field" value="{{ old('ai_voice', $firm->ai_voice) }}" placeholder="EXAVITQu4vr4xnSDxMaL">
+                    <label class="ui-label">Language</label>
+                    <select name="ai_language" class="ui-field" required>
+                        <option value="en" @selected(old('ai_language', $firm->ai_language ?: 'en') === 'en')>English</option>
+                        <option value="ur" @selected(old('ai_language', $firm->ai_language ?: 'en') === 'ur')>Urdu (اردو)</option>
+                    </select>
+                    <p class="small ui-muted mt-1 mb-0">
+                        English uses your Synthflow agent's own voice. Urdu uses voice <code>{{ \App\Domain\AI\AiReceptionistService::URDU_VOICE_ID }}</code>.
+                    </p>
                 </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <label class="ui-check mb-2">
+                <div class="col-md-4">
+                    <label class="ui-label">Voice ID <span class="opt">override</span></label>
+                    <input name="ai_voice" class="ui-field" value="{{ old('ai_voice', $firm->ai_voice) }}" placeholder="Use agent default voice (optional override)">
+                    <p class="small ui-muted mt-1 mb-0">Leave blank to use the agent's voice for English or <code>{{ \App\Domain\AI\AiReceptionistService::URDU_VOICE_ID }}</code> for Urdu.</p>
+                </div>
+                <div class="col-md-12 d-flex align-items-end">
+                    <label class="ui-check mb-1">
                         <input type="checkbox" class="ui-check-input" name="recording_enabled" value="1" @checked(old('recording_enabled', $firm->recording_enabled))>
                         <span>Call recording enabled</span>
                     </label>
                 </div>
                 <div class="col-12">
-                    <label class="ui-label">First message <span class="req">*</span></label>
-                    <textarea name="ai_greeting" class="ui-field" rows="3" required placeholder="Hello! Thank you for calling…">{{ old('ai_greeting', $firm->ai_greeting ?: ($sessionContext['greeting'] ?? '')) }}</textarea>
+                    <label class="ui-label">First message</label>
+                    <textarea name="ai_greeting" class="ui-field" rows="3" placeholder="{{ $resolvedGreeting }}">{{ old('ai_greeting', $firm->ai_greeting) }}</textarea>
                     <p class="small ui-muted mt-1 mb-0">
-                        Synced to Synthflow as <strong>agent speaks first</strong> (<code>agent_static</code>).
-                        Sync will keep this message — it should not disappear after sync.
-                    </p>
-                </div>
-                <div class="col-md-6">
-                    <label class="ui-label">Transfer number</label>
-                    <input name="transfer_number" class="ui-field" value="{{ old('transfer_number', $firm->transfer_number) }}" placeholder="+1…">
-                </div>
-                <div class="col-md-6">
-                    <label class="ui-label">Allowed topics</label>
-                    <input name="ai_allowed_topics" class="ui-field" value="{{ old('ai_allowed_topics', $firm->ai_allowed_topics) }}" placeholder="Services, fees, lawyers, booking">
-                </div>
-                <div class="col-12">
-                    <label class="ui-label">Escalation rules</label>
-                    <textarea name="ai_escalation_rules" class="ui-field" rows="2">{{ old('ai_escalation_rules', $firm->ai_escalation_rules) }}</textarea>
-                </div>
-                <div class="col-12">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-                        <label class="ui-label mb-0">System prompt <span class="opt">optional</span></label>
-                        <button type="button" class="ui-btn ui-btn-ghost" @click="prompt = defaults">Reset default</button>
-                    </div>
-                    <textarea name="ai_system_prompt" class="ui-field agent-prompt-editor" rows="16" x-model="prompt"></textarea>
-                    <p class="small ui-muted mt-2 mb-0">
-                        On update/sync we append live <strong>services &amp; lawyers</strong> under the prompt (like menu sync in the restaurant project).
+                        Synced to Synthflow as <strong>agent speaks first</strong> (<code>agent_static</code>). Leave blank to use the default Turn 1 greeting.
                     </p>
                 </div>
             </div>
@@ -332,16 +232,16 @@
         <form id="sync-only-form" method="POST" action="{{ route('ai.synthflow.sync') }}" class="d-none">@csrf</form>
     </section>
 
-    {{-- Catalog preview + test call --}}
+    {{-- Complete prompt preview + test call --}}
     <div class="agent-grid agent-grid-secondary">
         <section class="agent-card">
             <div class="agent-card-head">
                 <div>
-                    <h3>Services &amp; lawyers (injected on sync)</h3>
-                    <p>Preview of the catalog block appended to the Synthflow prompt.</p>
+                    <h3>Complete prompt (sent to Synthflow)</h3>
+                    <p>Full multi-tenant prompt combining the static template and your live account data block.</p>
                 </div>
             </div>
-            <pre class="sf-catalog">{{ $catalogKnowledge }}</pre>
+            <pre class="sf-catalog" style="max-height: 520px; overflow-y: auto;">{{ $completePrompt }}</pre>
         </section>
 
         <section class="agent-card">

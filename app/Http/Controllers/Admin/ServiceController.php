@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Firm\FirmService;
 use App\Domain\Services\ServiceCatalogService;
 use App\Http\Controllers\Controller;
 use App\Models\Lawyer;
@@ -15,7 +16,10 @@ use Illuminate\View\View;
 
 class ServiceController extends Controller implements HasMiddleware
 {
-    public function __construct(private readonly ServiceCatalogService $catalog) {}
+    public function __construct(
+        private readonly ServiceCatalogService $catalog,
+        private readonly FirmService $firmService,
+    ) {}
 
     public static function middleware(): array
     {
@@ -48,10 +52,15 @@ class ServiceController extends Controller implements HasMiddleware
     {
         $this->authorize('create', Service::class);
 
-        $this->catalog->createService($this->validated($request, [
+        $validated = $this->validated($request, [
             'booking_enabled' => true,
             'ai_enabled' => true,
-        ]));
+        ]);
+        $lawyerIds = $this->resolvedLawyerIds($validated);
+        unset($validated['lawyer_ids']);
+
+        $service = $this->catalog->createService($validated);
+        $this->catalog->syncLawyers($service, $lawyerIds);
 
         return redirect()->route('services.index')->with('success', 'Service created.');
     }
@@ -67,10 +76,17 @@ class ServiceController extends Controller implements HasMiddleware
     {
         $this->authorize('update', $service);
 
-        $this->catalog->updateService($service, $this->validated($request, [
+        $validated = $this->validated($request, [
             'booking_enabled' => (bool) $service->booking_enabled,
             'ai_enabled' => (bool) $service->ai_enabled,
-        ]));
+        ]);
+        $lawyerIds = $this->resolvedLawyerIds($validated, $request->has('lawyer_ids') || $request->has('_modal'));
+        unset($validated['lawyer_ids']);
+
+        $this->catalog->updateService($service, $validated);
+        if ($lawyerIds !== null) {
+            $this->catalog->syncLawyers($service, $lawyerIds);
+        }
 
         return redirect()->route('services.index')->with('success', 'Service updated.');
     }
@@ -95,11 +111,31 @@ class ServiceController extends Controller implements HasMiddleware
             'duration_minutes' => ['required', 'integer', 'min:5'],
             'buffer_minutes' => ['nullable', 'integer', 'min:0'],
             'status' => ['required', 'string'],
+            'lawyer_ids' => ['nullable', 'array'],
+            'lawyer_ids.*' => ['integer'],
         ]);
 
         return $data + [
             'booking_enabled' => $defaults['booking_enabled'] ?? true,
             'ai_enabled' => $defaults['ai_enabled'] ?? true,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return list<int>|null
+     */
+    private function resolvedLawyerIds(array $validated, bool $submittedFromForm = true): ?array
+    {
+        $requested = $validated['lawyer_ids'] ?? null;
+        if (is_array($requested) && $requested !== []) {
+            return Lawyer::query()->whereIn('id', $requested)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+
+        if ($this->firmService->current()->isIndividualAccount()) {
+            return Lawyer::query()->active()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+
+        return $submittedFromForm ? [] : null;
     }
 }

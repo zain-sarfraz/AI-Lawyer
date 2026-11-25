@@ -11,15 +11,33 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('firms', function (Blueprint $table) {
-            $table->string('account_type', 32)->default('firm')->after('status');
-            $table->string('plan', 32)->nullable()->after('account_type');
-            $table->string('billing_interval', 16)->nullable()->after('plan');
-            $table->string('subscription_status', 32)->nullable()->after('billing_interval');
-            $table->unsignedInteger('max_lawyers')->nullable()->after('subscription_status');
-            $table->string('stripe_customer_id')->nullable()->after('max_lawyers');
-            $table->string('stripe_subscription_id')->nullable()->after('stripe_customer_id');
-            $table->string('stripe_payment_intent_id')->nullable()->after('stripe_subscription_id');
-            $table->timestamp('subscribed_at')->nullable()->after('stripe_payment_intent_id');
+            if (! Schema::hasColumn('firms', 'account_type')) {
+                $table->string('account_type', 32)->default('firm')->after('status');
+            }
+            if (! Schema::hasColumn('firms', 'plan')) {
+                $table->string('plan', 32)->nullable()->after('account_type');
+            }
+            if (! Schema::hasColumn('firms', 'billing_interval')) {
+                $table->string('billing_interval', 16)->nullable()->after('plan');
+            }
+            if (! Schema::hasColumn('firms', 'subscription_status')) {
+                $table->string('subscription_status', 32)->nullable()->after('billing_interval');
+            }
+            if (! Schema::hasColumn('firms', 'max_lawyers')) {
+                $table->unsignedInteger('max_lawyers')->nullable()->after('subscription_status');
+            }
+            if (! Schema::hasColumn('firms', 'stripe_customer_id')) {
+                $table->string('stripe_customer_id')->nullable()->after('max_lawyers');
+            }
+            if (! Schema::hasColumn('firms', 'stripe_subscription_id')) {
+                $table->string('stripe_subscription_id')->nullable()->after('stripe_customer_id');
+            }
+            if (! Schema::hasColumn('firms', 'stripe_payment_intent_id')) {
+                $table->string('stripe_payment_intent_id')->nullable()->after('stripe_subscription_id');
+            }
+            if (! Schema::hasColumn('firms', 'subscribed_at')) {
+                $table->timestamp('subscribed_at')->nullable()->after('stripe_payment_intent_id');
+            }
         });
     }
 

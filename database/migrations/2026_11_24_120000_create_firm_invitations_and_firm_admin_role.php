@@ -12,26 +12,28 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('firm_invitations', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('firm_id')->constrained('firms')->cascadeOnDelete();
-            $table->foreignId('invited_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('name');
-            $table->string('email');
-            $table->string('phone', 50)->nullable();
-            $table->string('role', 32)->default('Lawyer');
-            $table->string('token', 64)->unique();
-            $table->string('status', 32)->default('pending');
-            $table->timestamp('expires_at')->nullable();
-            $table->timestamp('accepted_at')->nullable();
-            $table->foreignId('accepted_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamp('email_dispatched_at')->nullable();
-            $table->text('email_error')->nullable();
-            $table->timestamps();
+        if (! Schema::hasTable('firm_invitations')) {
+            Schema::create('firm_invitations', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('firm_id')->constrained('firms')->cascadeOnDelete();
+                $table->foreignId('invited_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('name');
+                $table->string('email');
+                $table->string('phone', 50)->nullable();
+                $table->string('role', 32)->default('Lawyer');
+                $table->string('token', 64)->unique();
+                $table->string('status', 32)->default('pending');
+                $table->timestamp('expires_at')->nullable();
+                $table->timestamp('accepted_at')->nullable();
+                $table->foreignId('accepted_user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamp('email_dispatched_at')->nullable();
+                $table->text('email_error')->nullable();
+                $table->timestamps();
 
-            $table->unique(['firm_id', 'email']);
-            $table->index(['firm_id', 'status']);
-        });
+                $table->unique(['firm_id', 'email']);
+                $table->index(['firm_id', 'status']);
+            });
+        }
 
         PermissionCatalog::sync();
 

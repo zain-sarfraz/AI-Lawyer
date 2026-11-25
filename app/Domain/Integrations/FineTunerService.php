@@ -9,13 +9,17 @@ use App\Domain\Firm\FirmService;
 use App\Models\Integration;
 use App\Models\Lawyer;
 use App\Models\Service;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class FineTunerService
 {
-    private const READ_TIMEOUT_SECONDS = 4;
+    private const READ_TIMEOUT_SECONDS = 12;
+
+    private const CONNECT_TIMEOUT_SECONDS = 5;
 
     private const SNAPSHOT_TTL_SECONDS = 300;
 
@@ -38,7 +42,7 @@ class FineTunerService
 
     public function configured(): bool
     {
-        return $this->connection() !== null || filled($this->settings()['model_id'] ?? config('services.synthflow.agent_id'));
+        return $this->connection() !== null || filled($this->settings()['model_id'] ?? null);
     }
 
     /**
@@ -50,9 +54,9 @@ class FineTunerService
     {
         $connection = $this->connection();
         $settings = $this->settings();
-        $modelId = $settings['model_id'] ?? config('services.synthflow.agent_id');
-        $phone = $settings['phone_number'] ?? config('services.synthflow.agent_phone');
-        $agentName = (string) ($settings['agent_name'] ?? config('services.synthflow.agent_name', 'Qubetech AI Lawyer'));
+        $modelId = $settings['model_id'] ?? null;
+        $phone = $settings['phone_number'] ?? null;
+        $agentName = (string) ($settings['agent_name'] ?? 'Synthflow Agent');
 
         $agents = [];
         if (is_string($modelId) && $modelId !== '') {
@@ -95,9 +99,9 @@ class FineTunerService
         $stored = $integration?->status === 'active' ? ($integration->encrypted_credentials ?? []) : [];
         $settings = $this->settings();
 
-        $apiKey = $stored['api_key'] ?? config('services.synthflow.api_key') ?? config('services.finetuner.api_key');
-        $workspaceId = $settings['workspace_id'] ?? config('services.synthflow.workspace_id') ?? config('services.finetuner.workspace_id');
-        $baseUrl = rtrim((string) ($settings['base_url'] ?? config('services.synthflow.base_url') ?? config('services.finetuner.base_url')), '/');
+        $apiKey = $stored['api_key'] ?? null;
+        $workspaceId = $settings['workspace_id'] ?? null;
+        $baseUrl = rtrim((string) ($settings['base_url'] ?? config('services.synthflow.base_url', 'https://api.us.synthflow.ai/v2')), '/');
 
         if (! is_string($apiKey) || $apiKey === '' || ! is_string($workspaceId) || $workspaceId === '') {
             return $this->connectionCache = null;
@@ -106,7 +110,7 @@ class FineTunerService
         return $this->connectionCache = [
             'api_key' => $apiKey,
             'workspace_id' => $workspaceId,
-            'base_url' => $baseUrl !== '' ? $baseUrl : (string) config('services.synthflow.base_url', 'https://api.us.synthflow.ai/v2'),
+            'base_url' => $baseUrl !== '' ? $baseUrl : 'https://api.us.synthflow.ai/v2',
         ];
     }
 
@@ -123,9 +127,9 @@ class FineTunerService
         $connection = $this->connection();
         $settings = $this->settings();
         if ($connection === null) {
-            $modelId = $settings['model_id'] ?? config('services.synthflow.agent_id');
-            $phone = $settings['phone_number'] ?? config('services.synthflow.agent_phone');
-            $agentName = (string) ($settings['agent_name'] ?? config('services.synthflow.agent_name', 'Qubetech AI Lawyer'));
+            $modelId = $settings['model_id'] ?? null;
+            $phone = $settings['phone_number'] ?? null;
+            $agentName = (string) ($settings['agent_name'] ?? 'Synthflow Agent');
             $hasModel = filled($modelId);
 
             return [
@@ -181,6 +185,7 @@ class FineTunerService
      */
     public function connect(string $apiKey, string $workspaceId, ?string $baseUrl = null): array
     {
+        $this->extendExecutionTime();
         $baseUrl = rtrim($baseUrl ?: (string) config('services.synthflow.base_url', 'https://api.us.synthflow.ai/v2'), '/');
 
         $probe = $this->probeConnection($apiKey, $workspaceId, $baseUrl);
@@ -232,31 +237,12 @@ class FineTunerService
             return ['ok' => false, 'error' => $listed['error']];
         }
 
-        $preferredPhone = $this->preferredPhone();
-        $preferredName = strtolower(trim((string) config('services.synthflow.agent_name', 'Qubetech AI Lawyer')));
-        $configuredId = trim((string) config('services.synthflow.agent_id', ''));
         $agents = $listed['items'];
         $currentId = $this->settings()['model_id'] ?? null;
 
         $match = null;
-        if ($configuredId !== '') {
-            $match = collect($agents)->first(fn (array $agent) => $agent['id'] === $configuredId);
-        }
-        if ($match === null && is_string($currentId) && $currentId !== '') {
+        if (is_string($currentId) && $currentId !== '') {
             $match = collect($agents)->first(fn (array $agent) => $agent['id'] === $currentId);
-        }
-        if ($match === null && $preferredPhone !== null) {
-            $match = collect($agents)->first(fn (array $agent) => $this->phonesMatch((string) ($agent['phone_number'] ?? ''), $preferredPhone));
-        }
-        if ($match === null && $preferredName !== '') {
-            $match = collect($agents)->first(fn (array $agent) => str_contains(strtolower((string) $agent['name']), $preferredName));
-        }
-        if ($match === null && $configuredId !== '') {
-            $match = [
-                'id' => $configuredId,
-                'name' => (string) config('services.synthflow.agent_name', 'Qubetech AI Lawyer'),
-                'phone_number' => $preferredPhone,
-            ];
         }
         if ($match === null) {
             $inbound = collect($agents)->filter(fn (array $agent) => ($agent['type'] ?? 'inbound') === 'inbound')->values();
@@ -266,15 +252,20 @@ class FineTunerService
         }
 
         if (! is_array($match)) {
-            return ['ok' => false, 'error' => 'Connected, but '.$this->preferredAgentLabel().' was not found in this workspace.'];
+            return ['ok' => false, 'error' => 'Connected. Select an existing Synthflow agent from the list and click "Use this agent".'];
         }
 
-        $phone = filled($match['phone_number'] ?? null) ? (string) $match['phone_number'] : $preferredPhone;
-        $this->mergeSettings([
+        $phone = filled($match['phone_number'] ?? null) ? (string) $match['phone_number'] : null;
+        $matchVoice = trim((string) ($match['voice'] ?? ''));
+        $settingsToMerge = [
             'model_id' => $match['id'],
             'phone_number' => $phone,
             'agent_name' => $match['name'],
-        ]);
+        ];
+        if ($matchVoice !== '' && $matchVoice !== \App\Domain\AI\AiReceptionistService::URDU_VOICE_ID) {
+            $settingsToMerge['agent_voice_id'] = $matchVoice;
+        }
+        $this->mergeSettings($settingsToMerge);
 
         if (filled($phone)) {
             $this->firmService->current()->update(['twilio_phone_number' => $phone]);
@@ -291,142 +282,17 @@ class FineTunerService
         ];
     }
 
-    private function preferredPhone(): ?string
-    {
-        $phone = trim((string) config('services.synthflow.agent_phone', ''));
-
-        return $phone !== '' ? $phone : null;
-    }
-
-    private function preferredAgentLabel(): string
-    {
-        $name = trim((string) config('services.synthflow.agent_name', 'Qubetech AI Lawyer'));
-        $phone = $this->preferredPhone();
-
-        return $phone ? $name.' ('.$phone.')' : $name;
-    }
-
-    private function phonesMatch(string $left, string $right): bool
-    {
-        $normalize = fn (string $value) => ltrim(preg_replace('/\D+/', '', $value) ?? '', '0');
-        $a = $normalize($left);
-        $b = $normalize($right);
-        if ($a === '' || $b === '') {
-            return false;
-        }
-
-        return $a === $b || str_ends_with($a, $b) || str_ends_with($b, $a);
-    }
-
     /**
-     * Create an inbound Synthflow agent for this firm and store model_id.
+     * Disabled: never create new agents on Synthflow from this application.
      *
      * @return array{ok: bool, model_id?: string, error?: string}
      */
     public function createInboundAgent(?string $name = null): array
     {
-        $connection = $this->connection();
-        if ($connection === null) {
-            return ['ok' => false, 'error' => 'Connect Synthflow first (API key + workspace).'];
-        }
-
-        $firm = $this->firmService->current();
-        $publicBase = rtrim((string) config('app.url'), '/');
-        $agentName = trim((string) ($name ?: (($firm->receptionist_name ?: 'AI Receptionist').' · '.$firm->firm_name)));
-
-        $greeting = $this->receptionist->greetingMessage();
-        if (! filled($firm->ai_greeting)) {
-            $firm->forceFill(['ai_greeting' => $greeting])->save();
-        }
-
-        $listening = array_filter(
-            $this->agentListeningConfig($firm),
-            fn ($value) => $value !== null && $value !== ''
-        );
-
-        $agent = array_merge($listening, [
-            'prompt' => $this->receptionist->systemPrompt(withCatalog: true),
-            'greeting_message' => $greeting,
-            'greeting_message_mode' => 'agent_static',
-            'timezone' => $firm->resolvedTimezone(),
-            'llm' => (string) config('services.synthflow.llm', 'gpt-4.1-mini'),
-            'is_transcript_disabled' => false,
-        ]);
-
-        if (filled($firm->ai_voice)) {
-            $agent['voice_id'] = (string) $firm->ai_voice;
-        }
-
-        $payload = [
-            'type' => 'inbound',
-            'name' => $agentName,
-            'description' => 'AI Lawyer inbound receptionist for services, fees, and booking.',
-            'external_webhook_url' => $publicBase.'/api/webhooks/finetuner/post-call',
-            'inbound_call_webhook_url' => $publicBase.'/api/webhooks/finetuner/inbound',
-            'is_recording' => (bool) $firm->recording_enabled,
-            'agent' => $agent,
+        return [
+            'ok' => false,
+            'error' => 'Creating new Synthflow agents is disabled. Connect your workspace and select an existing Synthflow agent instead.',
         ];
-
-        try {
-            $response = Http::withToken($connection['api_key'])
-                ->acceptJson()
-                ->timeout(25)
-                ->post($connection['base_url'].'/assistants', $payload);
-        } catch (\Throwable $exception) {
-            Log::warning('Synthflow create agent failed', ['message' => $exception->getMessage()]);
-
-            return ['ok' => false, 'error' => 'Could not reach Synthflow to create an agent.'];
-        }
-
-        if (! $response->successful()) {
-            return ['ok' => false, 'error' => $this->errorMessage($response->json(), $response->status())];
-        }
-
-        $modelId = (string) (
-            data_get($response->json(), 'response.model_id')
-            ?? data_get($response->json(), 'response.assistants.model_id')
-            ?? data_get($response->json(), 'model_id')
-            ?? ''
-        );
-
-        if ($modelId === '') {
-            // Fallback: re-list and pick newest matching name
-            $this->forgetSnapshotCache($connection['workspace_id'], $connection['api_key']);
-            $agents = $this->listAgents($connection)['items'];
-            $match = collect($agents)->first(fn ($agent) => ($agent['name'] ?? '') === $agentName);
-            $modelId = (string) ($match['id'] ?? '');
-        }
-
-        if ($modelId === '') {
-            return ['ok' => false, 'error' => 'Agent created but Synthflow did not return a model_id.'];
-        }
-
-        $this->mergeSettings([
-            'model_id' => $modelId,
-            'last_synced_at' => now()->toIso8601String(),
-        ]);
-
-        $this->forgetSnapshotCache($connection['workspace_id'], $connection['api_key']);
-
-        $actions = $this->syncBookingActions(
-            $connection,
-            $modelId,
-            $publicBase,
-            (string) config('services.voice_gateway.secret'),
-            (int) $firm->id,
-        );
-
-        if (! $actions['ok']) {
-            return [
-                'ok' => true,
-                'model_id' => $modelId,
-                'error' => 'Agent created, but some booking actions failed: '.($actions['error'] ?? ''),
-            ];
-        }
-
-        $this->mergeSettings(['action_ids' => $actions['action_ids']]);
-
-        return ['ok' => true, 'model_id' => $modelId];
     }
 
     /**
@@ -434,6 +300,7 @@ class FineTunerService
      */
     public function assignNumber(string $modelId, string $phoneNumber): array
     {
+        $this->extendExecutionTime();
         $connection = $this->connection();
         if ($connection === null) {
             return ['ok' => false, 'error' => 'Synthflow is not connected.'];
@@ -482,7 +349,7 @@ class FineTunerService
     }
 
     /**
-     * Create the inbound agent if missing, otherwise update + sync tools.
+     * Update + sync the already-attached inbound agent. Never creates a new agent on Synthflow.
      *
      * @return array{ok: bool, model_id?: string, error?: string}
      */
@@ -497,7 +364,10 @@ class FineTunerService
                 : ['ok' => false, 'error' => $sync['error'] ?? 'Could not update Synthflow agent.'];
         }
 
-        return $this->createInboundAgent($name);
+        return [
+            'ok' => false,
+            'error' => 'No Synthflow agent attached. Select an existing Synthflow agent instead — new agents are never auto-created.',
+        ];
     }
 
     /**
@@ -555,14 +425,16 @@ class FineTunerService
      */
     public function syncAgent(?string $modelId = null): array
     {
+        $this->extendExecutionTime();
+
         $connection = $this->connection();
         if ($connection === null) {
             return ['ok' => false, 'error' => 'Synthflow API key is missing. Set SYNTHFLOW_API_KEY in .env or connect your workspace to sync live to Synthflow.'];
         }
 
-        $modelId = $modelId ?: ($this->settings()['model_id'] ?? config('services.synthflow.agent_id'));
+        $modelId = $modelId ?: ($this->settings()['model_id'] ?? null);
         if (! is_string($modelId) || $modelId === '') {
-            return ['ok' => false, 'error' => 'Create or attach a Synthflow agent first.'];
+            return ['ok' => false, 'error' => 'Attach an existing Synthflow agent first.'];
         }
 
         $firm = $this->firmService->current();
@@ -570,10 +442,7 @@ class FineTunerService
         $secret = (string) config('services.voice_gateway.secret');
 
         // Keep First message visible in CRM and spoken on calls after every sync.
-        $greeting = $this->receptionist->greetingMessage();
-        if (! filled($firm->ai_greeting)) {
-            $firm->forceFill(['ai_greeting' => $greeting])->save();
-        }
+        $greeting = $this->receptionist->greetingMessage($firm);
 
         $actions = $this->syncBookingActions($connection, $modelId, $publicBase, $secret, (int) $firm->id);
 
@@ -591,8 +460,19 @@ class FineTunerService
             'is_transcript_disabled' => false,
         ]);
 
+        $liveVoiceId = trim((string) ($actions['current_voice_id'] ?? ''));
+        $storedAgentVoiceId = trim((string) ($this->settings()['agent_voice_id'] ?? ''));
+        if ($liveVoiceId !== '' && $liveVoiceId !== \App\Domain\AI\AiReceptionistService::URDU_VOICE_ID) {
+            $storedAgentVoiceId = $liveVoiceId;
+        }
+
         if (filled($firm->ai_voice)) {
             $agent['voice_id'] = (string) $firm->ai_voice;
+        } elseif ($this->receptionist->isUrduLanguage($firm->ai_language)) {
+            $agent['voice_id'] = \App\Domain\AI\AiReceptionistService::URDU_VOICE_ID;
+        } elseif ($storedAgentVoiceId !== '' && $storedAgentVoiceId !== \App\Domain\AI\AiReceptionistService::URDU_VOICE_ID) {
+            // English restores the Synthflow agent's own voice instead of the Urdu voice.
+            $agent['voice_id'] = $storedAgentVoiceId;
         }
 
         $payload = [
@@ -640,7 +520,7 @@ class FineTunerService
             }
         }
 
-        $this->mergeSettings([
+        $merged = [
             'model_id' => $modelId,
             'last_synced_at' => now()->toIso8601String(),
             'action_ids' => $actions['action_ids'],
@@ -648,7 +528,11 @@ class FineTunerService
             'greeting_message_mode' => 'agent_static',
             'firm_id' => (int) $firm->id,
             'account_label' => $firm->isFirmAccount() ? 'firm' : 'individual',
-        ]);
+        ];
+        if ($storedAgentVoiceId !== '') {
+            $merged['agent_voice_id'] = $storedAgentVoiceId;
+        }
+        $this->mergeSettings($merged);
 
         $this->forgetSnapshotCache($connection['workspace_id'], $connection['api_key']);
 
@@ -668,43 +552,43 @@ class FineTunerService
         $definitions = [
             [
                 'name' => 'get_services',
-                'description' => 'List firm legal services by name. Read the "speak" or "menu" field aloud. Do NOT use option numbers. Ask which service they want. Map the spoken service name to services[].id. Do not mention prices yet.',
-                'speech' => 'Let me pull up our legal services and lawyers for you.',
+                'description' => 'List firm legal services by name. Read the "speak" field aloud. Do NOT use option numbers. Ask which service they want. Map the spoken service name to services[].id. Do not mention prices yet.',
+                'speech' => '',
                 'body' => ['firm_id' => $firmId, 'provider_call_id' => '<call_id>'],
-                'variables' => [['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123']],
+                'variables' => [['name' => 'call_id', 'type' => 'string', 'description' => 'Current call id', 'example' => 'call_123']],
             ],
             [
                 'name' => 'get_service_details',
-                'description' => 'Get the consultation fee, duration, and lawyers for a chosen service. Call this after the caller selects a service or asks about pricing, and announce the fee and duration at this point.',
-                'speech' => 'One moment while I check the fee and details for that service.',
+                'description' => 'Get the consultation fee, duration (if set), and lawyers for a chosen service. Read the "speak" field aloud.',
+                'speech' => '',
                 'body' => [
                     'firm_id' => $firmId,
                     'provider_call_id' => '<call_id>',
                     'service_id' => '<service_id>',
                 ],
                 'variables' => [
-                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current call id', 'example' => 'call_123'],
                     ['name' => 'service_id', 'type' => 'string', 'description' => 'Numeric service id from get_services', 'example' => '1'],
                 ],
             ],
             [
                 'name' => 'get_lawyers',
-                'description' => 'List lawyers for a service with their weekly availability hours (days and times). Use this to tell the caller when that lawyer is usually available.',
-                'speech' => 'Let me see which lawyer handles that and when they are available.',
+                'description' => 'List active lawyers for a service with their weekly availability hours.',
+                'speech' => '',
                 'body' => [
                     'firm_id' => $firmId,
                     'provider_call_id' => '<call_id>',
                     'service_id' => '<service_id>',
                 ],
                 'variables' => [
-                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current call id', 'example' => 'call_123'],
                     ['name' => 'service_id', 'type' => 'string', 'description' => 'Service id', 'example' => '1'],
                 ],
             ],
             [
                 'name' => 'list_available_days',
-                'description' => 'List available days this week by weekday name. Read "speak"/"menu". Ask which day. Do NOT use option numbers. Never invent days.',
-                'speech' => 'Let me check which days this lawyer has open this week.',
+                'description' => 'List available days this week by weekday name. Read "speak" aloud. Ask which day. Do NOT use option numbers. Never invent days.',
+                'speech' => '',
                 'body' => [
                     'firm_id' => $firmId,
                     'provider_call_id' => '<call_id>',
@@ -712,15 +596,15 @@ class FineTunerService
                     'lawyer_id' => '<lawyer_id>',
                 ],
                 'variables' => [
-                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current call id', 'example' => 'call_123'],
                     ['name' => 'service_id', 'type' => 'string', 'description' => 'Service id', 'example' => '1'],
                     ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Lawyer id from get_lawyers', 'example' => '2'],
                 ],
             ],
             [
                 'name' => 'find_available_slots',
-                'description' => 'Get availability for one date. Read "speak"/"menu" — tell ONLY the start and end time window (available_from to available_until). Let the caller choose any time in that window. Do NOT list every 30-minute slot or use option numbers. Then map their chosen time to slots[].start_at for booking. Pass service_id, lawyer_id, date YYYY-MM-DD.',
-                'speech' => 'Let me check when they are available that day.',
+                'description' => 'Get availability for one date. Tell ONLY the available_from to available_until window. Let the caller choose any time in that window. Do NOT list every slot or use option numbers. Pass service_id, lawyer_id, date YYYY-MM-DD.',
+                'speech' => '',
                 'body' => [
                     'firm_id' => $firmId,
                     'provider_call_id' => '<call_id>',
@@ -729,7 +613,7 @@ class FineTunerService
                     'date' => '<date>',
                 ],
                 'variables' => [
-                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current call id', 'example' => 'call_123'],
                     ['name' => 'service_id', 'type' => 'string', 'description' => 'Service id', 'example' => '1'],
                     ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Lawyer id', 'example' => '2'],
                     ['name' => 'date', 'type' => 'string', 'description' => 'Date YYYY-MM-DD from list_available_days', 'example' => '2026-10-10'],
@@ -737,8 +621,8 @@ class FineTunerService
             ],
             [
                 'name' => 'book_legal_consultation',
-                'description' => 'Book and confirm ONE legal consultation after the caller chooses a day and a time inside the availability window. Map their time to slots[].start_at from find_available_slots. Call AT MOST ONCE per phone call. If already booked successfully, do NOT call again. Requires service_id, lawyer_id, start_at, name, phone. Never ask for a verification code.',
-                'speech' => 'I am booking that consultation for you now.',
+                'description' => 'Book ONE legal consultation after the caller confirms the summary. Map their time to slots[].start_at from find_available_slots. Call AT MOST ONCE per call. Pass "same" as phone if the caller refers to the number they are calling from.',
+                'speech' => '',
 
                 'body' => [
                     'firm_id' => $firmId,
@@ -751,12 +635,12 @@ class FineTunerService
                     'source' => 'phone_ai',
                 ],
                 'variables' => [
-                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current FineTuner call id', 'example' => 'call_123'],
-                    ['name' => 'service_id', 'type' => 'string', 'description' => 'Numeric service id from get_services or get_service_details', 'example' => '17'],
-                    ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Numeric lawyer id from get_lawyers', 'example' => '17'],
+                    ['name' => 'call_id', 'type' => 'string', 'description' => 'Current call id', 'example' => 'call_123'],
+                    ['name' => 'service_id', 'type' => 'string', 'description' => 'Numeric service id from get_services or get_service_details', 'example' => '1'],
+                    ['name' => 'lawyer_id', 'type' => 'string', 'description' => 'Numeric lawyer id from get_lawyers', 'example' => '2'],
                     ['name' => 'start_at', 'type' => 'string', 'description' => 'ISO start time from find_available_slots', 'example' => '2026-10-16T21:00:00+00:00'],
-                    ['name' => 'name', 'type' => 'string', 'description' => 'Caller full name', 'example' => 'Ahmad Ali'],
-                    ['name' => 'phone', 'type' => 'string', 'description' => 'Caller phone number in any format', 'example' => '03247087907'],
+                    ['name' => 'name', 'type' => 'string', 'description' => 'Caller full name', 'example' => 'Alex Smith'],
+                    ['name' => 'phone', 'type' => 'string', 'description' => 'Caller phone number, or "same" if using their current number', 'example' => '+15550100001'],
                 ],
             ],
         ];
@@ -764,25 +648,72 @@ class FineTunerService
         $actionIds = [];
         $errors = [];
 
+        $responses = Http::pool(function (Pool $pool) use ($connection, $definitions, $modelId, $publicBase, $secret) {
+            $requests = [
+                $pool->as('assistant')
+                    ->withToken($connection['api_key'])
+                    ->acceptJson()
+                    ->timeout(15)
+                    ->get($connection['base_url'].'/assistants/'.rawurlencode($modelId).'?include_actions=true'),
+            ];
+
+            foreach ($definitions as $definition) {
+                $requests[] = $pool->as($definition['name'])
+                    ->withToken($connection['api_key'])
+                    ->acceptJson()
+                    ->timeout(20)
+                    ->post($connection['base_url'].'/actions', $this->customActionPayload($definition, $publicBase, $secret));
+            }
+
+            return $requests;
+        });
+
         foreach ($definitions as $definition) {
-            $created = $this->createCustomAction($connection, $definition, $publicBase, $secret);
-            if (! ($created['ok'] ?? false)) {
-                $errors[] = $definition['name'].': '.($created['error'] ?? 'failed');
+            $name = $definition['name'];
+            $res = $responses[$name] ?? null;
+
+            if ($res instanceof \Throwable) {
+                $errors[] = $name.': '.$res->getMessage();
 
                 continue;
             }
-            $actionIds[] = (string) $created['action_id'];
+            if (! $res instanceof Response) {
+                $errors[] = $name.': no response';
+
+                continue;
+            }
+            if (! $res->successful()) {
+                $errors[] = $name.': '.$this->errorMessage($res->json(), $res->status());
+
+                continue;
+            }
+
+            $actionId = (string) (
+                data_get($res->json(), 'response.action_id')
+                ?? data_get($res->json(), 'action_id')
+                ?? ''
+            );
+            if ($actionId === '') {
+                $errors[] = $name.': No action_id returned';
+
+                continue;
+            }
+
+            $actionIds[] = $actionId;
         }
+
+        $assistantsRes = $responses['assistant'] ?? null;
+        $currentVoiceId = $assistantsRes instanceof Response
+            ? trim((string) data_get($assistantsRes->json(), 'response.assistants.0.agent.voice_id', ''))
+            : '';
 
         if ($actionIds !== []) {
             try {
                 // Detach all currently attached actions first to prevent duplicates and stale tool accumulation
-                $assistantsRes = Http::withToken($connection['api_key'])
-                    ->acceptJson()
-                    ->timeout(15)
-                    ->get($connection['base_url'].'/assistants/'.rawurlencode($modelId).'?include_actions=true');
+                $existingActions = $assistantsRes instanceof Response
+                    ? (array) data_get($assistantsRes->json(), 'response.assistants.0.actions', [])
+                    : [];
 
-                $existingActions = (array) data_get($assistantsRes->json(), 'response.assistants.0.actions', []);
                 if ($existingActions !== []) {
                     Http::withToken($connection['api_key'])
                         ->acceptJson()
@@ -810,15 +741,15 @@ class FineTunerService
             'ok' => $errors === [],
             'error' => $errors === [] ? null : implode('; ', $errors),
             'action_ids' => $actionIds,
+            'current_voice_id' => $currentVoiceId !== '' ? $currentVoiceId : null,
         ];
     }
 
     /**
-     * @param  array{api_key: string, workspace_id: string, base_url: string}  $connection
      * @param  array{name: string, description: string, speech: string, body: array<string, mixed>, variables: list<array<string, string>>}  $definition
-     * @return array{ok: bool, action_id?: string, error?: string}
+     * @return array<string, mixed>
      */
-    private function createCustomAction(array $connection, array $definition, string $publicBase, string $secret): array
+    private function customActionPayload(array $definition, string $publicBase, string $secret): array
     {
         $headers = [
             ['key' => 'Content-Type', 'value' => 'application/json'],
@@ -829,15 +760,14 @@ class FineTunerService
             $headers[] = ['key' => 'X-Voice-Gateway-Secret', 'value' => $secret];
         }
 
-        $payload = [
+        return [
             'CUSTOM_ACTION' => [
                 'http_mode' => 'POST',
                 'url' => $publicBase.'/api/ai/finetuner/tools/'.$definition['name'],
                 'run_action_before_call_start' => false,
                 'name' => $definition['name'],
                 'description' => $definition['description'],
-                // Short fill line only — do not use Synthflow's default
-                // "This is taking a little longer than usual, thanks for holding."
+                // Stay silent while running the tool.
                 'speech_while_using_the_tool' => $definition['speech'],
                 'message_delay' => '',
                 'message_delay_time' => 60,
@@ -849,31 +779,6 @@ class FineTunerService
                 'failure_timeout' => 20,
             ],
         ];
-
-        try {
-            $response = Http::withToken($connection['api_key'])
-                ->acceptJson()
-                ->timeout(20)
-                ->post($connection['base_url'].'/actions', $payload);
-        } catch (\Throwable $exception) {
-            return ['ok' => false, 'error' => $exception->getMessage()];
-        }
-
-        if (! $response->successful()) {
-            return ['ok' => false, 'error' => $this->errorMessage($response->json(), $response->status())];
-        }
-
-        $actionId = (string) (
-            data_get($response->json(), 'response.action_id')
-            ?? data_get($response->json(), 'action_id')
-            ?? ''
-        );
-
-        if ($actionId === '') {
-            return ['ok' => false, 'error' => 'No action_id returned'];
-        }
-
-        return ['ok' => true, 'action_id' => $actionId];
     }
 
     /**
@@ -888,13 +793,9 @@ class FineTunerService
         $integration = $this->integration();
         $stored = is_array($integration?->settings_json) ? $integration->settings_json : [];
 
-        $defaults = array_filter([
-            'workspace_id' => config('services.synthflow.workspace_id'),
-            'base_url' => config('services.synthflow.base_url', 'https://api.us.synthflow.ai/v2'),
-            'model_id' => config('services.synthflow.agent_id'),
-            'phone_number' => config('services.synthflow.agent_phone'),
-            'agent_name' => config('services.synthflow.agent_name', 'Qubetech AI Lawyer'),
-        ], fn ($v) => $v !== null && $v !== '');
+        $defaults = [
+            'base_url' => (string) config('services.synthflow.base_url', 'https://api.us.synthflow.ai/v2'),
+        ];
 
         return $this->settingsCache = array_merge($defaults, $stored);
     }
@@ -958,7 +859,7 @@ class FineTunerService
             $agents = Http::withToken($apiKey)
                 ->acceptJson()
                 ->timeout(self::READ_TIMEOUT_SECONDS)
-                ->connectTimeout(2)
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->get($baseUrl.'/assistants/');
 
             if (! $agents->successful()) {
@@ -968,7 +869,7 @@ class FineTunerService
             $numbers = Http::withToken($apiKey)
                 ->acceptJson()
                 ->timeout(self::READ_TIMEOUT_SECONDS)
-                ->connectTimeout(2)
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->get($baseUrl.'/numbers', [
                     'workspace' => $workspaceId,
                     'limit' => 1,
@@ -987,25 +888,37 @@ class FineTunerService
     }
 
     /**
-     * Listening / STT settings so the agent actually catches caller speech
-     * (names, phone digits, Urdu/English mix) instead of cutting them off.
+     * Listening and speech-to-text settings so the agent catches caller speech
+     * (names, phone numbers, legal terms) without cutting them off.
      *
      * @return array<string, mixed>
      */
     private function agentListeningConfig(\App\Models\Firm $firm): array
     {
         $language = $this->mapLanguage((string) ($firm->ai_language ?: 'en'));
-        $serviceNames = Service::query()->active()->orderBy('name')->limit(40)->pluck('name');
-        $lawyerNames = Lawyer::query()->active()->with('user')->orderBy('id')->limit(40)->get()
+        $firmId = (int) $firm->id;
+        $serviceNames = Service::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $firmId)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->limit(40)
+            ->pluck('name');
+        $lawyerNames = Lawyer::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $firmId)
+            ->where('status', 'active')
+            ->with('user')
+            ->orderBy('id')
+            ->limit(40)
+            ->get()
             ->map(fn (Lawyer $lawyer) => $lawyer->displayName());
 
         $keywords = collect([
             'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
-            'thirty', 'half past', 'quarter',
-            'book', 'appointment', 'consultation', 'civil', 'civil cases', 'employment',
-            'employment cases', 'family', 'family cases', 'cases', 'monday', 'tuesday',
-            'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'morning', 'afternoon',
-            'evening', 'o\'clock', 'AM', 'PM',
+            'thirty', 'book', 'appointment', 'consultation',
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'morning', 'afternoon', 'evening', 'AM', 'PM',
         ])
             ->merge($serviceNames)
             ->merge($lawyerNames)
@@ -1028,7 +941,6 @@ class FineTunerService
             'initial_pause_seconds' => 1,
             'transcriber_endpointing' => 300,
             'transcriber_speech_recognition' => 'high_accuracy',
-            // Phone calls in PK often mix English/Urdu — Synthflow STT catches speech better than en-only models.
             'transcriber_provider' => 'synthflow-stt',
             // Extreme voice-isolation chops caller audio; standard catches speech better.
             'noise_cancellation' => 'standard',
@@ -1046,15 +958,9 @@ class FineTunerService
         $language = strtolower(trim($language));
 
         return match ($language) {
-            'en', 'en-us', 'english' => 'en-US',
-            // Synthflow has no dedicated Urdu code — use multilingual for Urdu / mix.
-            'ur', 'urdu', 'en-ur', 'en_ur', 'english+urdu', 'english + urdu', 'multi' => 'multi',
-            'hi', 'hindi' => 'hi',
-            default => in_array($language, [
-                'multi', 'en-US', 'bg', 'cs', 'de-DE', 'el', 'fi', 'fr-FR', 'es-ES', 'hu', 'it', 'fr',
-                'pt-BR', 'nl-NL', 'hi', 'zh-CN', 'no', 'sv-SE', 'da', 'da-DK', 'id', 'ja', 'ko', 'ms',
-                'ro', 'ru', 'sk', 'tr', 'uk', 'vi', 'th', 'pl',
-            ], true) ? $language : 'en-US',
+            'ur', 'urdu', 'ur-pk' => 'ur',   // Synthflow Urdu
+            'en', 'en-us', 'english', '' => 'en-US',
+            default => 'en-US',
         };
     }
 
@@ -1068,7 +974,7 @@ class FineTunerService
             $response = Http::withToken($connection['api_key'])
                 ->acceptJson()
                 ->timeout(self::READ_TIMEOUT_SECONDS)
-                ->connectTimeout(2)
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->get($connection['base_url'].'/assistants/');
         } catch (\Throwable $exception) {
             Log::warning('Synthflow agents unreachable', ['message' => $exception->getMessage()]);
@@ -1113,7 +1019,7 @@ class FineTunerService
             $response = Http::withToken($connection['api_key'])
                 ->acceptJson()
                 ->timeout(self::READ_TIMEOUT_SECONDS)
-                ->connectTimeout(2)
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->get($connection['base_url'].'/numbers', [
                     'workspace' => $connection['workspace_id'],
                     'limit' => 50,
@@ -1149,6 +1055,13 @@ class FineTunerService
         }
 
         return ['items' => $numbers, 'error' => null];
+    }
+
+    private function extendExecutionTime(): void
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(90);
+        }
     }
 
     private function errorMessage(mixed $json, int $status): string

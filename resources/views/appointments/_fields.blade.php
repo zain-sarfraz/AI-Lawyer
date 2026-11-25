@@ -6,7 +6,7 @@
     $defaultEmail = old('email', $appointment?->lead?->email ?: $appointment?->client?->email);
     $defaultServiceId = old('service_id', $appointment?->service_id);
     $defaultLawyerId = old('lawyer_id', $appointment?->lawyer_id);
-    $defaultDate = old('date', $appointment?->start_at?->toDateString() ?: now()->toDateString());
+    $defaultDate = old('date', $appointment?->localStartAt()?->toDateString() ?: app(\App\Domain\Scheduling\FirmTime::class)->now()->toDateString());
     $defaultNotes = old('notes', $appointment?->notes);
     $defaultStatus = old('status', $appointment?->status?->value ?? 'pending');
     $showStatus = $showStatus ?? false;

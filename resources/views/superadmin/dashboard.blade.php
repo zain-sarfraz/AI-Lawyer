@@ -819,7 +819,7 @@
                     </svg>
                     <span>Recent Appointments</span>
                 </div>
-                <a href="{{ route('superadmin.dashboard') }}" style="font-size: 12.5px; font-weight: 600; color: #C49832; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                <a href="{{ route('superadmin.appointments.index') }}" style="font-size: 12.5px; font-weight: 600; color: #C49832; text-decoration: none; display: flex; align-items: center; gap: 4px;">
                     <span>View All</span>
                     <span>→</span>
                 </a>

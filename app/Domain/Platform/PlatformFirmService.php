@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Domain\Platform;
 
 use App\Domain\Firm\FirmContext;
-use App\Domain\Scheduling\DefaultAppointmentTypes;
 use App\Enums\UserStatus;
 use App\Models\Firm;
 use App\Models\User;
@@ -29,11 +28,8 @@ class PlatformFirmService
                 'phone' => $data['phone'] ?? null,
                 'timezone' => $data['timezone'] ?? Firm::DEFAULT_TIMEZONE,
                 'currency' => $data['currency'] ?? 'USD',
-                'receptionist_name' => 'Virtual Receptionist',
                 'status' => 'active',
             ]);
-
-            DefaultAppointmentTypes::seedFirm((int) $firm->id, (string) $firm->currency);
 
             return $firm->fresh();
         });

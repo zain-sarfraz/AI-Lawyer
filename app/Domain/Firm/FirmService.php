@@ -5,6 +5,7 @@ namespace App\Domain\Firm;
 use App\Domain\Audit\AuditLogService;
 use App\Models\Firm;
 use App\Models\FirmSetting;
+use App\Models\Lawyer;
 use Illuminate\Support\Facades\DB;
 
 class FirmService
@@ -39,8 +40,6 @@ class FirmService
                         'max_lawyers' => 1,
                         'timezone' => Firm::DEFAULT_TIMEZONE,
                         'currency' => 'USD',
-                        'receptionist_name' => 'AI Legal Assistant',
-                        'ai_greeting' => 'Hello, thank you for calling. How can I help you today?',
                     ]);
                 }
 
@@ -48,6 +47,11 @@ class FirmService
                     $user->firm_id = $firm->id;
                     $user->saveQuietly();
                 }
+
+                Lawyer::withoutGlobalScopes()
+                    ->where('user_id', $user->id)
+                    ->whereNull('firm_id')
+                    ->update(['firm_id' => $firm->id]);
 
                 return $firm;
             }

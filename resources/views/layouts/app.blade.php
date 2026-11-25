@@ -59,7 +59,7 @@
                 ['route' => 'schedule.availability', 'match' => 'schedule.availability*', 'label' => 'Availability', 'icon' => 'clock', 'permission' => 'schedules.manage'],
                 ['route' => 'appointments.index', 'match' => 'appointments.*', 'label' => 'Appointments', 'icon' => 'calendar-check', 'permission' => 'appointments.view'],
             ]],
-            ['group' => 'Firm', 'items' => [
+            ['group' => ($user && ($user->isIndividual() || (! $user->isFirmAdmin() && ($user->firm?->isIndividualAccount() ?? false))) ? 'Practice' : 'Firm'), 'items' => [
                 ['route' => 'clients.index', 'match' => 'clients.*', 'label' => 'Clients', 'icon' => 'users', 'permission' => 'clients.view'],
                 ['route' => 'cases.index', 'match' => 'cases.*', 'label' => 'Cases Management', 'icon' => 'scales', 'permission' => 'cases.view'],
                 ['route' => 'case-research.index', 'match' => 'case-research.*', 'label' => 'Cases', 'icon' => 'book-open', 'permission' => 'cases.view', 'lawyer_only' => true],
@@ -85,7 +85,8 @@
         return $section;
     })->filter(fn (array $section) => count($section['items']) > 0)->values()->all();
     $initials = collect(explode(' ', $user->name ?? 'U'))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
-    $roleLabel = $user?->isFirmAdmin() ? 'Firm Admin' : ($user?->getRoleNames()->first() ?: 'Team');
+    $isIndividual = (bool) ($user && ($user->isIndividual() || (! $user->isFirmAdmin() && ($user->firm?->isIndividualAccount() ?? false))));
+    $roleLabel = $user?->displayRoleLabel() ?? 'Team';
 @endphp
 
 <div class="flex min-h-screen w-full overflow-x-clip">
@@ -99,7 +100,7 @@
             <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-sm font-extrabold text-white shadow-[0_0_0_3px_rgba(18,138,130,0.28)]">AL</div>
             <div x-show="!collapsed" x-cloak class="min-w-0 flex-1">
                 <div class="font-display text-lg font-semibold leading-none tracking-tight text-white">AI Lawyer</div>
-                <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-gold-400">{{ $isFirmAdminNav ? 'Firm admin' : 'Legal workspace' }}</div>
+                <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-gold-400">{{ $isFirmAdminNav ? 'Firm admin' : ($isIndividual ? 'Individual practice' : 'Legal workspace') }}</div>
             </div>
             <button
                 type="button"
@@ -181,7 +182,7 @@
                         <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-500"></span>
                     </span>
                     <span class="hidden sm:inline text-xs font-bold uppercase tracking-wider text-teal-400">
-                        {{ $user->firm?->firm_name ?? 'Firm Desk' }}
+                        {{ $isIndividual ? $user->name : ($user->firm?->firm_name ?? 'Firm Desk') }}
                     </span>
                     <span class="hidden md:inline rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
                         {{ $roleLabel }}

@@ -23,7 +23,7 @@ class NotificationController extends Controller
 
         // Uses global scopes: FirmScope (only this firm) and RestrictsToAssignedLawyer (only this lawyer if role is Lawyer)
         $appointments = Appointment::query()
-            ->with(['client', 'lead', 'lawyer.user', 'service'])
+            ->with(['firm', 'client', 'lead', 'lawyer.user', 'service'])
             ->latest('id')
             ->limit(15)
             ->get();
@@ -38,6 +38,7 @@ class NotificationController extends Controller
             $clientPhone = $a->client?->phone ?: ($a->lead?->phone ?: ($a->relatedCall()?->caller_phone ?: 'N/A'));
             $lawyerName = $a->lawyer?->user?->name ?: ($a->lawyer?->displayName() ?: 'Assigned Lawyer');
             $serviceName = $a->service?->name ?: 'Consultation';
+            $localStart = $a->localStartAt();
 
             return [
                 'id' => $a->id,
@@ -46,9 +47,9 @@ class NotificationController extends Controller
                 'service_name' => $serviceName,
                 'lawyer_name' => $lawyerName,
                 'lawyer_id' => $a->lawyer_id,
-                'date' => $a->start_at ? $a->start_at->format('M d, Y') : 'Date TBD',
-                'time' => $a->start_at ? $a->start_at->format('g:i A') : 'Time TBD',
-                'start_at_iso' => $a->start_at?->toIso8601String(),
+                'date' => $localStart ? $localStart->format('M d, Y') : 'Date TBD',
+                'time' => $localStart ? $localStart->format('g:i A') : 'Time TBD',
+                'start_at_iso' => $localStart?->toIso8601String(),
                 'created_at_human' => $a->created_at?->diffForHumans() ?: 'Just now',
                 'status' => is_object($a->status) ? ($a->status->value ?? 'scheduled') : (string) ($a->status ?: 'scheduled'),
                 'fee' => $a->fee_amount ? '$'.number_format((float) $a->fee_amount, 2) : 'Free',

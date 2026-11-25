@@ -5,9 +5,9 @@ namespace App\Domain\Lawyers;
 use App\Domain\Audit\AuditLogService;
 use App\Domain\Firm\FirmContext;
 use App\Models\Firm;
+use App\Models\Jurisdiction;
 use App\Models\Lawyer;
 use App\Models\User;
-use App\Models\WorkingHour;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -38,17 +38,6 @@ class LawyerService
             }
             $lawyer->jurisdictions()->sync($jurisdictionIds);
 
-            // Default weekly windows (Mon–Fri 09:00–17:00). Lawyers can edit under Availability.
-            foreach ([1, 2, 3, 4, 5] as $dayOfWeek) {
-                WorkingHour::query()->create([
-                    'lawyer_id' => $lawyer->id,
-                    'day_of_week' => $dayOfWeek,
-                    'start_time' => '09:00:00',
-                    'end_time' => '17:00:00',
-                    'status' => 'active',
-                ]);
-            }
-
             $this->audit->log('lawyer.created', $lawyer, null, $lawyer->toArray());
 
             return $lawyer->load('user', 'services', 'jurisdictions');
@@ -77,8 +66,11 @@ class LawyerService
 
             $lawyer->services()->detach();
             $lawyer->jurisdictions()->detach();
-            $lawyer->appointments()->delete();
-            $user = $lawyer->user;
+            $lawyer->appointments()->withoutGlobalScopes()->delete();
+            $lawyer->workingHours()->withoutGlobalScopes()->delete();
+            $lawyer->scheduleBreaks()->withoutGlobalScopes()->delete();
+            $lawyer->availabilityExceptions()->withoutGlobalScopes()->delete();
+            $user = $lawyer->user_id ? User::query()->withoutGlobalScopes()->find($lawyer->user_id) : null;
             $lawyer->delete();
             $user?->delete();
             $this->audit->log('lawyer.deleted', null, $old, null);
@@ -104,5 +96,47 @@ class LawyerService
         throw ValidationException::withMessages([
             'plan' => "Your {$firm->plan} (individual) plan allows only {$max} lawyer. Upgrade to Growth for a multi-lawyer firm workspace.",
         ]);
+    }
+
+    /**
+     * Provision or sync a Lawyer profile when a checkout user activates, preserving
+     * their chosen country code and case-law jurisdictions (defaulting by country).
+     */
+    public function provisionForActivatedUser(User $user, ?int $firmId = null, string $title = 'Individual Lawyer'): Lawyer
+    {
+        $onboarding = is_array($user->onboarding) ? $user->onboarding : [];
+        $country = strtoupper(trim((string) ($onboarding['preferred_country'] ?? '')));
+        if (! in_array($country, ['PK', 'GB', 'US', 'CA', 'AU'], true)) {
+            $country = null;
+        }
+        $phone = ! empty($onboarding['preferred_phone']) ? (string) $onboarding['preferred_phone'] : null;
+
+        $lawyer = Lawyer::withoutGlobalScopes()->firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'firm_id' => $firmId,
+                'title' => $title,
+                'status' => 'active',
+                'country' => $country,
+                'phone' => $phone,
+                'specialties' => [],
+            ]
+        );
+
+        if ($lawyer->jurisdictions()->count() === 0) {
+            $preferredIds = array_values(array_filter(array_map('intval', (array) ($onboarding['preferred_jurisdiction_ids'] ?? []))));
+            $syncIds = [];
+            if ($preferredIds !== []) {
+                $syncIds = Jurisdiction::query()->active()->whereIn('id', $preferredIds)->pluck('id')->all();
+            } elseif ($country !== null) {
+                $syncIds = Jurisdiction::query()->active()->where('country_code', $country)->pluck('id')->all();
+            }
+
+            if ($syncIds !== []) {
+                $lawyer->jurisdictions()->sync($syncIds);
+            }
+        }
+
+        return $lawyer;
     }
 }

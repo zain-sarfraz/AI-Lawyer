@@ -169,6 +169,12 @@ class AvailabilityService
         $dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
         return WorkingHour::query()
+            ->withoutGlobalScopes()
+            ->when(
+                $lawyer->firm_id !== null,
+                fn ($q) => $q->where('firm_id', $lawyer->firm_id),
+                fn ($q) => $q->whereNull('firm_id'),
+            )
             ->where('lawyer_id', $lawyer->id)
             ->where('status', 'active')
             ->orderBy('day_of_week')

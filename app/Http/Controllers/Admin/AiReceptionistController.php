@@ -60,10 +60,12 @@ class AiReceptionistController extends Controller implements HasMiddleware
 
         return view('admin.ai.show', [
             'firm' => $firm,
-            'systemPrompt' => $this->receptionist->systemPrompt(),
-            'defaultSystemPrompt' => $this->receptionist->defaultSystemPrompt(),
-            'catalogKnowledge' => Cache::remember("ai.catalog.{$firm->id}", 60, fn () => $this->receptionist->catalogKnowledge()),
-            'sessionContext' => $this->receptionist->sessionContext(),
+            'systemPrompt' => $this->receptionist->systemPrompt(false, $firm),
+            'defaultSystemPrompt' => $this->receptionist->defaultSystemPrompt($firm),
+            'catalogKnowledge' => Cache::remember("ai.catalog.{$firm->id}", 60, fn () => $this->receptionist->catalogKnowledge($firm)),
+            'completePrompt' => $this->receptionist->systemPrompt(true, $firm),
+            'resolvedGreeting' => $this->receptionist->greetingMessage($firm),
+            'sessionContext' => $this->receptionist->sessionContext($firm),
             'tools' => AiToolDefinitions::realtimeTools(),
             'gatewayHealth' => $gatewayHealth,
             'publicWsUrl' => config('services.voice_gateway.public_ws_url'),
@@ -72,18 +74,18 @@ class AiReceptionistController extends Controller implements HasMiddleware
             'recentAiCalls' => Call::query()->latest('started_at')->limit(6)->get(),
             'fineTuner' => $this->fineTuner->snapshot(),
             'fineTunerKey' => $this->fineTuner->maskedKey(),
-            'fineTunerWorkspace' => $connection['workspace_id'] ?? ($settings['workspace_id'] ?? config('services.synthflow.workspace_id')),
+            'fineTunerWorkspace' => $connection['workspace_id'] ?? ($settings['workspace_id'] ?? ''),
             'fineTunerSettings' => $settings,
             'fineTunerWebhooks' => $this->fineTuner->webhookUrls(),
-            'fineTunerBaseUrl' => $connection['base_url'] ?? ($settings['base_url'] ?? 'https://api.synthflow.ai/v2'),
+            'fineTunerBaseUrl' => $connection['base_url'] ?? ($settings['base_url'] ?? 'https://api.us.synthflow.ai/v2'),
             'telnyxConfigured' => $this->telnyx->configured(),
             'telnyxSearchResults' => session('telnyx_search', []),
             'assignedPhone' => $settings['phone_number'] ?? $firm->twilio_phone_number,
-            'agentId' => $settings['model_id'] ?? config('services.synthflow.agent_id'),
+            'agentId' => $settings['model_id'] ?? null,
             'lastSyncedAt' => $settings['last_synced_at'] ?? null,
             'serverMode' => 'synthflow_telnyx',
-            'preferredAgentName' => (string) config('services.synthflow.agent_name', 'Qubetech AI Lawyer'),
-            'preferredAgentPhone' => (string) config('services.synthflow.agent_phone', '+16097809610'),
+            'preferredAgentName' => '',
+            'preferredAgentPhone' => '',
         ]);
     }
 
@@ -118,21 +120,9 @@ class AiReceptionistController extends Controller implements HasMiddleware
 
     public function createFineTunerAgent(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
+        return back()->withErrors([
+            'agent' => 'Creating new agents on Synthflow is disabled. Connect your workspace and select an existing Synthflow agent instead.',
         ]);
-
-        $result = $this->fineTuner->ensureAgent($data['name'] ?? null);
-        if (! ($result['ok'] ?? false)) {
-            return back()->withErrors(['agent' => $result['error'] ?? 'Could not create / update Synthflow agent.']);
-        }
-
-        $message = 'Synthflow agent updated'.(isset($result['model_id']) ? ' ('.$result['model_id'].')' : '').'.';
-        if (! empty($result['error'])) {
-            $message .= ' Note: '.$result['error'];
-        }
-
-        return back()->with('success', $message);
     }
 
     public function assignFineTuner(Request $request): RedirectResponse
@@ -220,15 +210,10 @@ class AiReceptionistController extends Controller implements HasMiddleware
 
         $modelId = $data['model_id'] ?? ($this->fineTuner->settings()['model_id'] ?? null);
         if (! filled($modelId)) {
-            $created = $this->fineTuner->ensureAgent();
-            if (! ($created['ok'] ?? false)) {
-                $this->firm->update(['twilio_phone_number' => $number]);
-                $this->fineTuner->mergeSettings(['phone_number' => $number]);
+            $this->firm->update(['twilio_phone_number' => $number]);
+            $this->fineTuner->mergeSettings(['phone_number' => $number]);
 
-                return back()->with('success', 'Number saved on firm. Create / connect Synthflow agent, then attach.')
-                    ->withErrors(['agent' => $created['error'] ?? 'Agent not ready yet.']);
-            }
-            $modelId = $created['model_id'] ?? null;
+            return back()->with('success', 'Number '.$number.' saved on workspace. Select an existing Synthflow agent below to attach it.');
         }
 
         $assign = $this->fineTuner->assignNumber((string) $modelId, $number);
@@ -261,37 +246,35 @@ class AiReceptionistController extends Controller implements HasMiddleware
     public function update(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'receptionist_name' => ['required', 'string', 'max:255'],
-            'ai_greeting' => ['required', 'string', 'max:2000'],
-            'ai_tone' => ['required', 'string', 'max:255'],
+            'receptionist_name' => ['nullable', 'string', 'max:255'],
+            'ai_greeting' => ['nullable', 'string', 'max:2000'],
+            'ai_tone' => ['nullable', 'string', 'max:255'],
             'ai_language' => ['required', 'string', 'max:16'],
             'ai_voice' => ['nullable', 'string', 'max:255'],
             'ai_allowed_topics' => ['nullable', 'string', 'max:5000'],
             'ai_escalation_rules' => ['nullable', 'string', 'max:5000'],
             'ai_system_prompt' => ['nullable', 'string', 'max:50000'],
             'transfer_number' => ['nullable', 'string', 'max:50'],
-            'after_hours_behavior' => ['required', 'string', 'max:64'],
+            'after_hours_behavior' => ['nullable', 'string', 'max:64'],
             'recording_enabled' => ['sometimes', 'boolean'],
             'sync_now' => ['sometimes', 'boolean'],
         ]);
 
         $syncNow = $request->boolean('sync_now');
+        $hasPromptField = $request->has('ai_system_prompt');
         $prompt = trim((string) ($data['ai_system_prompt'] ?? ''));
         unset($data['sync_now'], $data['ai_system_prompt']);
 
         $data['recording_enabled'] = $request->boolean('recording_enabled');
         $this->firm->update($data);
 
-        $defaultPrompt = $this->receptionist->defaultSystemPrompt();
-        $this->firm->update([
-            'ai_system_prompt' => ($prompt === '' || $prompt === trim($defaultPrompt)) ? null : $prompt,
-        ]);
-
-        // Ensure First message stays populated in the CRM after save/sync.
-        $firm = $this->firm->current()->fresh();
-        if (! filled($firm->ai_greeting)) {
-            $this->firm->update(['ai_greeting' => $this->receptionist->greetingMessage()]);
+        if ($hasPromptField) {
+            $this->firm->update([
+                'ai_system_prompt' => $prompt !== '' ? $prompt : null,
+            ]);
         }
+
+        $firm = $this->firm->current()->fresh();
 
         $message = 'AI receptionist settings saved.';
         if ($syncNow && filled($this->fineTuner->settings()['model_id'] ?? null)) {

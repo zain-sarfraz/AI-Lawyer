@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Domain\Scheduling\FirmTime;
 use App\Enums\AppointmentStatus;
 use App\Models\Concerns\BelongsToFirm;
 use App\Models\Concerns\RestrictsToAssignedLawyer;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -136,5 +139,28 @@ class Appointment extends Model
     public function scopeBlocking($query)
     {
         return $query->whereIn('status', AppointmentStatus::blockingValues());
+    }
+
+    public function localStartAt(?Firm $firm = null): ?Carbon
+    {
+        return $this->toFirmInstant($this->start_at, $firm);
+    }
+
+    public function localEndAt(?Firm $firm = null): ?Carbon
+    {
+        return $this->toFirmInstant($this->end_at, $firm);
+    }
+
+    private function toFirmInstant(?CarbonInterface $instant, ?Firm $firm = null): ?Carbon
+    {
+        if (! $instant) {
+            return null;
+        }
+
+        $resolvedFirm = $firm
+            ?? ($this->relationLoaded('firm') ? $this->firm : null)
+            ?? ($this->firm_id ? Firm::query()->find($this->firm_id) : null);
+
+        return app(FirmTime::class)->toFirm($instant, $resolvedFirm);
     }
 }

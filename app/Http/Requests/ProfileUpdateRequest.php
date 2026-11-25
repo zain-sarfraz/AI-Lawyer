@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Lawyer;
 use App\Models\User;
+use App\Support\Phone\PhoneNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,7 +18,11 @@ class ProfileUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $user = $this->user();
+        $canEditPractice = $user && ($user->isIndividual() || $user->isFirmAdmin())
+            && Lawyer::withoutGlobalScopes()->where('user_id', $user->id)->exists();
+
+        $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => [
                 'required',
@@ -24,8 +30,19 @@ class ProfileUpdateRequest extends FormRequest
                 'lowercase',
                 'email',
                 'max:255',
-                Rule::unique(User::class)->ignore($this->user()->id),
+                Rule::unique(User::class)
+                    ->where(fn ($query) => $query->where('firm_id', $user?->firm_id))
+                    ->ignore($user?->id),
             ],
         ];
+
+        if ($canEditPractice) {
+            $rules['phone_country'] = ['required', 'string', Rule::in(PhoneNormalizer::supportedCountries())];
+            $rules['phone_local'] = ['nullable', 'string', 'max:32'];
+            $rules['jurisdiction_ids'] = ['nullable', 'array'];
+            $rules['jurisdiction_ids.*'] = ['integer', 'distinct', 'exists:jurisdictions,id'];
+        }
+
+        return $rules;
     }
 }

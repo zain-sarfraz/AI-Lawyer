@@ -1690,10 +1690,16 @@ function submitSalesInquiry(e) {
     { id: 3, start: 22, end: 30, el: document.getElementById('vscene4') }
   ];
 
-  function updateSoundLabels(on) {
+  let audioPrimed = false;
+
+  function updateSoundLabels(on, browserBlocked = false) {
     soundEnabled = on;
-    const label = on ? 'Sound: ON' : 'Sound: OFF';
-    const icon = on ? '🔊' : '🔈';
+    let label = on ? 'Sound: ON' : 'Sound: OFF';
+    let icon = on ? '🔊' : '🔈';
+    if (on && browserBlocked) {
+      label = 'Tap for Sound';
+      icon = '🔇';
+    }
     if (soundIcon) soundIcon.textContent = icon;
     if (soundText) soundText.textContent = label;
     if (topSoundIcon) topSoundIcon.textContent = icon;
@@ -1703,33 +1709,63 @@ function submitSalesInquiry(e) {
   function tryPlayAudio() {
     if (!audio || !soundEnabled) return;
     audio.currentTime = currentTime;
+    audio.volume = 1;
     audio.muted = false;
     const p = audio.play();
     if (p !== undefined) {
       p.then(() => {
-        updateSoundLabels(true);
+        audioPrimed = true;
+        updateSoundLabels(true, false);
       }).catch(() => {
         // Browser blocked unmuted autoplay before user interaction:
         // Play muted immediately so time track runs in exact sync with visual scenes
         audio.muted = true;
         audio.play().catch(() => {});
+        updateSoundLabels(true, true);
       });
     }
   }
 
-  // Automatic un-mute on ANY user movement or interaction (scroll, wheel, mousemove, keydown, click)
+  // Prime or un-mute audio on ANY user gesture (click, keydown, touch, scroll, etc.)
   function tryAutoUnmute() {
-    if (!audio || !soundEnabled || !isPlaying) return;
+    if (!audio || !soundEnabled) return;
+
+    // Even before reaching the video section, prime <audio> on the user's first key/click/touch
+    if (!isPlaying) {
+      if (!audioPrimed) {
+        const prevVol = audio.volume;
+        audio.volume = 0;
+        audio.muted = false;
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(() => {
+            audio.pause();
+            audio.currentTime = currentTime;
+            audio.volume = prevVol;
+            audioPrimed = true;
+          }).catch(() => {
+            audio.volume = prevVol;
+            audio.muted = true;
+          });
+        }
+      }
+      return;
+    }
+
     if (audio.muted || audio.paused) {
+      audio.volume = 1;
       audio.muted = false;
       const p = audio.play();
       if (p !== undefined) {
         p.then(() => {
-          updateSoundLabels(true);
-          // Once audio is unmuted and active, clean up movement listeners
-          window.removeEventListener('mousemove', tryAutoUnmute);
-          window.removeEventListener('pointermove', tryAutoUnmute);
-        }).catch(() => {});
+          audioPrimed = true;
+          updateSoundLabels(true, false);
+          window.removeEventListener('mousemove', tryAutoUnmute, { capture: true });
+          window.removeEventListener('pointermove', tryAutoUnmute, { capture: true });
+        }).catch(() => {
+          audio.muted = true;
+          updateSoundLabels(true, true);
+        });
       }
     }
   }
@@ -1744,15 +1780,30 @@ function submitSalesInquiry(e) {
   stage?.addEventListener('pointermove', tryAutoUnmute, { passive: true });
 
   function toggleSound() {
+    if (soundEnabled && audio && audio.muted) {
+      // If browser had auto-muted sound, clicking sound button unmutes instead of turning OFF
+      audio.volume = 1;
+      audio.muted = false;
+      audio.currentTime = currentTime;
+      audio.play().then(() => {
+        audioPrimed = true;
+        updateSoundLabels(true, false);
+      }).catch(() => {});
+      return;
+    }
     soundEnabled = !soundEnabled;
-    updateSoundLabels(soundEnabled);
+    updateSoundLabels(soundEnabled, false);
     if (!soundEnabled) {
       if (audio) { audio.pause(); audio.muted = true; }
     } else {
       if (audio) {
+        audio.volume = 1;
         audio.muted = false;
         audio.currentTime = currentTime;
-        audio.play().catch(() => {});
+        audio.play().then(() => {
+          audioPrimed = true;
+          updateSoundLabels(true, false);
+        }).catch(() => {});
       }
     }
   }

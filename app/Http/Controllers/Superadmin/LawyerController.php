@@ -14,6 +14,7 @@ use App\Models\Service;
 use App\Support\Phone\PhoneNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -56,24 +57,51 @@ class LawyerController extends Controller
         }
 
         if ($accountType = $request->input('account_type')) {
+            $hasUserAccountType = Schema::hasColumn('users', 'account_type');
+            $hasUserRole = Schema::hasColumn('users', 'role');
+            $hasFirmAccountType = Schema::hasColumn('firms', 'account_type');
+
             if ($accountType === 'individual') {
-                $query->where(function ($q) {
-                    $q->whereNull('firm_id')
-                      ->orWhereHas('user', function ($uq) {
-                          $uq->withoutGlobalScopes()
-                             ->where('account_type', 'individual')
-                             ->orWhere('role', 'individual_lawyer');
-                      });
+                $query->where(function ($q) use ($hasUserAccountType, $hasUserRole, $hasFirmAccountType) {
+                    $q->whereNull('firm_id');
+                    if ($hasFirmAccountType) {
+                        $q->orWhereHas('firm', fn ($fq) => $fq->where('account_type', 'individual'));
+                    }
+                    if ($hasUserAccountType || $hasUserRole) {
+                        $q->orWhereHas('user', function ($uq) use ($hasUserAccountType, $hasUserRole) {
+                            $uq->withoutGlobalScopes()->where(function ($sq) use ($hasUserAccountType, $hasUserRole) {
+                                if ($hasUserAccountType) {
+                                    $sq->where('account_type', 'individual');
+                                }
+                                if ($hasUserRole) {
+                                    $hasUserAccountType
+                                        ? $sq->orWhere('role', 'individual_lawyer')
+                                        : $sq->where('role', 'individual_lawyer');
+                                }
+                            });
+                        });
+                    }
                 });
             } elseif ($accountType === 'firm') {
-                $query->whereNotNull('firm_id')
-                      ->whereHas('user', function ($uq) {
-                          $uq->withoutGlobalScopes()
-                             ->where(function ($sq) {
-                                 $sq->where('account_type', 'firm')
-                                    ->orWhere('role', '!=', 'individual_lawyer');
-                             });
-                      });
+                $query->whereNotNull('firm_id');
+                if ($hasFirmAccountType) {
+                    $query->whereHas('firm', fn ($fq) => $fq->where(fn ($fsq) => $fsq->where('account_type', 'firm')->orWhereNull('account_type')));
+                }
+                if ($hasUserAccountType || $hasUserRole) {
+                    $query->where(function ($q) use ($hasUserAccountType, $hasUserRole) {
+                        $q->whereNull('user_id')->orWhereHas('user', function ($uq) use ($hasUserAccountType, $hasUserRole) {
+                            $uq->withoutGlobalScopes()->where(function ($sq) use ($hasUserAccountType, $hasUserRole) {
+                                if ($hasUserAccountType) {
+                                    $sq->where('account_type', 'firm')->orWhereNull('account_type');
+                                }
+                                if ($hasUserRole) {
+                                    $method = $hasUserAccountType ? 'orWhere' : 'where';
+                                    $sq->{$method}(fn ($rq) => $rq->whereNull('role')->orWhere('role', '!=', 'individual_lawyer'));
+                                }
+                            });
+                        });
+                    });
+                }
             }
         }
 
@@ -89,7 +117,7 @@ class LawyerController extends Controller
             ->limit(5)
             ->get();
 
-        $firms = Firm::query()->orderBy('firm_name')->get(['id', 'firm_name']);
+        $firms = Firm::query()->lawFirms()->orderBy('firm_name')->get(['id', 'firm_name']);
         $servicesByFirm = Service::query()
             ->withoutGlobalScopes()
             ->orderBy('name')
@@ -163,9 +191,11 @@ class LawyerController extends Controller
         $model = Lawyer::query()->withoutGlobalScopes()->with('user')->findOrFail($lawyer);
         $data = $this->validatedLawyer($request, $model);
         $phone = $this->normalizedPhone($data['phone_country'], $data['phone_local'] ?? null);
-        $this->assertServicesBelongToFirm((int) $model->firm_id, $data['service_ids'] ?? []);
+        if ($model->firm_id !== null) {
+            $this->assertServicesBelongToFirm((int) $model->firm_id, $data['service_ids'] ?? []);
+        }
 
-        app(FirmContext::class)->run((int) $model->firm_id, function () use ($model, $data, $phone) {
+        app(FirmContext::class)->run($model->firm_id !== null ? (int) $model->firm_id : null, function () use ($model, $data, $phone) {
             if ($model->user) {
                 $userUpdates = [
                     'name' => $data['name'],
@@ -177,7 +207,7 @@ class LawyerController extends Controller
                 $model->user->update($userUpdates);
             }
 
-            $firm = Firm::query()->withoutGlobalScopes()->find($model->firm_id);
+            $firm = $model->firm_id !== null ? Firm::query()->withoutGlobalScopes()->find($model->firm_id) : null;
             $tz = !empty($data['timezone']) ? $data['timezone'] : ($model->timezone ?? $firm?->resolvedTimezone() ?? Firm::DEFAULT_TIMEZONE);
 
             $this->lawyers->update($model, [
@@ -188,7 +218,7 @@ class LawyerController extends Controller
                 'bio' => $data['bio'] ?? null,
                 'timezone' => $tz,
                 'status' => $data['status'],
-            ], $data['service_ids'] ?? [], $this->validatedJurisdictionIds($data['jurisdiction_ids'] ?? []));
+            ], $model->firm_id !== null ? ($data['service_ids'] ?? []) : [], $this->validatedJurisdictionIds($data['jurisdiction_ids'] ?? []));
         });
 
         return redirect()->route('superadmin.lawyers.index')->with('success', 'Lawyer updated.');
@@ -200,7 +230,7 @@ class LawyerController extends Controller
 
         $model = Lawyer::query()->withoutGlobalScopes()->findOrFail($lawyer);
 
-        $message = app(FirmContext::class)->run((int) $model->firm_id, function () use ($model) {
+        $message = app(FirmContext::class)->run($model->firm_id !== null ? (int) $model->firm_id : null, function () use ($model) {
             return $this->lawyers->delete($model);
         });
 
@@ -217,9 +247,11 @@ class LawyerController extends Controller
                 'email',
                 Rule::unique('users', 'email')
                     ->where(function ($q) use ($request, $lawyer) {
-                        $firmId = (int) ($request->input('firm_id') ?: $lawyer?->firm_id);
+                        $rawFirmId = $request->input('firm_id') ?: $lawyer?->firm_id;
 
-                        return $q->where('firm_id', $firmId);
+                        return $rawFirmId !== null && $rawFirmId !== ''
+                            ? $q->where('firm_id', (int) $rawFirmId)
+                            : $q->whereNull('firm_id');
                     })
                     ->ignore($lawyer?->user_id),
             ],

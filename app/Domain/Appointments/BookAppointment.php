@@ -124,15 +124,18 @@ class BookAppointment
                     $client->leads()->syncWithoutDetaching([$lead->id]);
                 }
 
+                $firmId = (int) ($lawyer->firm_id ?: $this->firmService->current()->id);
                 $callId = $payload['call_id'] ?? null;
                 if (! $callId && ! empty($payload['provider_call_id'])) {
                     $callId = Call::query()->withoutGlobalScope(FirmScope::class)
+                        ->where('firm_id', $firmId)
                         ->where('provider_call_id', $payload['provider_call_id'])
                         ->value('id');
                 }
 
                 if ($callId) {
                     Call::query()->withoutGlobalScope(FirmScope::class)
+                        ->where('firm_id', $firmId)
                         ->whereKey($callId)
                         ->update(array_filter([
                             'lead_id' => $lead->id,
@@ -221,7 +224,9 @@ class BookAppointment
 
         $callId = isset($payload['call_id']) && $payload['call_id'] !== '' ? (int) $payload['call_id'] : null;
         if (! $callId && ! empty($payload['provider_call_id'])) {
+            $firmId = (int) $this->firmService->current()->id;
             $callId = Call::query()->withoutGlobalScope(FirmScope::class)
+                ->where('firm_id', $firmId)
                 ->where('provider_call_id', $payload['provider_call_id'])
                 ->value('id');
             if ($callId) {

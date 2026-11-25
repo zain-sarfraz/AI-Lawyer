@@ -18,7 +18,12 @@ class FirmController extends Controller
 
     public function index(Request $request): View
     {
-        $query = Firm::query()->withCount('users');
+        $query = Firm::query()
+            ->with([
+                'owner',
+                'users' => fn ($q) => $q->withoutGlobalScopes()->select(['id', 'firm_id', 'name', 'account_type', 'role']),
+            ])
+            ->withCount('users');
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {

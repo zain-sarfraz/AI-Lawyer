@@ -62,9 +62,18 @@ class CaseResearchController extends Controller implements HasMiddleware
     public function index(Request $request): View
     {
         $lawyer = $this->currentLawyer($request);
-        $jurisdictionIds = $lawyer
-            ? $lawyer->jurisdictions()->pluck('jurisdictions.id')->all()
-            : Jurisdiction::query()->active()->pluck('id')->all();
+        if ($lawyer) {
+            $jurisdictionIds = $lawyer->jurisdictions()->pluck('jurisdictions.id')->all();
+            if ($jurisdictionIds === [] && filled($lawyer->country)) {
+                $jurisdictionIds = Jurisdiction::query()
+                    ->active()
+                    ->where('country_code', strtoupper((string) $lawyer->country))
+                    ->pluck('id')
+                    ->all();
+            }
+        } else {
+            $jurisdictionIds = Jurisdiction::query()->active()->pluck('id')->all();
+        }
 
         $query = CaseLawRecord::query()
             ->with(['jurisdiction', 'court'])

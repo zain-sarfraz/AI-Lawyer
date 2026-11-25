@@ -44,6 +44,10 @@ class FineTunerToolController extends Controller
             }
         }
 
+        if (empty($arguments['phone']) && ! empty($arguments['customer_phone'])) {
+            $arguments['phone'] = $arguments['customer_phone'];
+        }
+
         $firmId = $this->resolveFirmId($request, $data, $providerCallId);
         \Illuminate\Support\Facades\Log::info('FineTuner tool call received', [
             'tool' => $tool,
@@ -67,17 +71,24 @@ class FineTunerToolController extends Controller
 
             if ($providerCallId !== '') {
                 $call = Call::query()->withoutGlobalScope(FirmScope::class)
+                    ->where('firm_id', $firmId)
                     ->where('provider_call_id', $providerCallId)
                     ->first();
             }
 
             // Reuse an in-progress call for this phone when FineTuner sends a new/missing call id.
-            if (! $call && $firmId) {
-                $phone = $arguments['phone'] ?? null;
-                if (is_array($phone)) {
-                    $phone = $phone['value'] ?? $phone['number'] ?? $phone['phone'] ?? reset($phone) ?: null;
-                }
-                $digits = preg_replace('/\D+/', '', (string) ($phone ?? '')) ?: '';
+            $rawPhone = $arguments['phone'] ?? ($arguments['customer_phone'] ?? null);
+            if (is_array($rawPhone)) {
+                $rawPhone = $rawPhone['value'] ?? $rawPhone['number'] ?? $rawPhone['phone'] ?? reset($rawPhone) ?: null;
+            }
+            $isSameAlias = is_string($rawPhone) && in_array(
+                strtolower(trim((string) preg_replace('/\s+/', ' ', $rawPhone))),
+                ['same', 'same number', 'this number', 'the one i am calling from', "the one i'm calling from", 'caller id'],
+                true
+            );
+
+            if (! $call && $firmId && ! $isSameAlias) {
+                $digits = preg_replace('/\D+/', '', (string) ($rawPhone ?? '')) ?: '';
                 if ($digits !== '' && strlen($digits) >= 7) {
                     $call = Call::query()->withoutGlobalScope(FirmScope::class)
                         ->where('firm_id', $firmId)
@@ -94,20 +105,16 @@ class FineTunerToolController extends Controller
                     'firm_id' => $firmId,
                     'provider_call_id' => $providerCallId,
                     'direction' => 'inbound',
-                    'caller_phone' => is_string($arguments['phone'] ?? null) ? $arguments['phone'] : null,
+                    'caller_phone' => (! $isSameAlias && is_string($rawPhone) && $rawPhone !== '') ? $rawPhone : null,
                     'status' => 'in_progress',
                     'started_at' => now(),
                 ]);
             }
 
-            if ($call && ! empty($arguments['phone'])) {
-                $phone = $arguments['phone'];
-                if (is_array($phone)) {
-                    $phone = $phone['value'] ?? $phone['number'] ?? $phone['phone'] ?? reset($phone) ?: null;
-                }
-                if (is_string($phone) && $phone !== '' && empty($call->caller_phone)) {
-                    $call->update(['caller_phone' => $phone]);
-                }
+            if ($call && $isSameAlias && ! empty($call->caller_phone)) {
+                $arguments['phone'] = (string) $call->caller_phone;
+            } elseif ($call && ! $isSameAlias && is_string($rawPhone) && $rawPhone !== '' && empty($call->caller_phone)) {
+                $call->update(['caller_phone' => $rawPhone]);
             }
 
             if ($call) {
@@ -171,12 +178,11 @@ class FineTunerToolController extends Controller
             }
         }
 
-        // 4. Model / Assistant ID lookup in Integration table or config
+        // 4. Model / Assistant ID lookup in active Integration rows (never fall back globally across tenants)
         $modelId = (string) (
             $request->input('model_id')
             ?? $request->input('assistant_id')
             ?? $request->input('agent_id')
-            ?? config('services.synthflow.agent_id')
             ?? ''
         );
         if ($modelId !== '') {
@@ -193,12 +199,11 @@ class FineTunerToolController extends Controller
             }
         }
 
-        // 5. Match by phone number (called number or caller number)
+        // 5. Match by called phone number
         $phone = (string) (
             $request->input('to_number')
             ?? $request->input('phone_number')
             ?? $request->input('to')
-            ?? config('services.synthflow.agent_phone')
             ?? ''
         );
         if ($phone !== '') {
@@ -208,25 +213,9 @@ class FineTunerToolController extends Controller
             }
         }
 
-        // 6. Active Synthflow integration fallback
-        $activeFinetunerFirmId = \App\Models\Integration::query()
-            ->withoutGlobalScopes()
-            ->where('provider', 'finetuner')
-            ->where('status', 'active')
-            ->latest('id')
-            ->value('firm_id');
-        if ($activeFinetunerFirmId) {
-            return (int) $activeFinetunerFirmId;
-        }
-
-        // 7. Local/testing fallback: latest firm with active services, or first firm
-        if (app()->environment('local', 'testing')) {
-            $firmWithServices = Firm::query()
-                ->whereHas('services')
-                ->orderByDesc('id')
-                ->value('id');
-
-            return (int) ($firmWithServices ?: Firm::query()->orderBy('id')->value('id'));
+        // 6. Local/testing single-tenant convenience ONLY (never pick across multiple firms)
+        if (app()->environment('local', 'testing') && Firm::query()->count() === 1) {
+            return (int) Firm::query()->orderBy('id')->value('id');
         }
 
         return null;

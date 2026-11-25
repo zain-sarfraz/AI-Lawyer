@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Domain\Firm\FirmContext;
 use Database\Factories\FirmFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -102,9 +103,57 @@ class Firm extends Model
         return $this->lawyerCount() < $max;
     }
 
+    public function isIndividualWorkspace(): bool
+    {
+        if ($this->isIndividualAccount()) {
+            return true;
+        }
+
+        if ($this->relationLoaded('owner') && ($this->owner?->isIndividual() ?? false)) {
+            return true;
+        }
+
+        if ($this->relationLoaded('users') && $this->users->contains(fn (User $u) => $u->isIndividual())) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function workspaceDisplayName(): string
+    {
+        if (! $this->isIndividualWorkspace()) {
+            return (string) $this->firm_name;
+        }
+
+        if ($this->relationLoaded('owner') && ! empty($this->owner?->name)) {
+            return (string) $this->owner->name;
+        }
+
+        if ($this->relationLoaded('users')) {
+            $member = $this->users->first();
+            if ($member && ! empty($member->name)) {
+                return (string) $member->name;
+            }
+        }
+
+        return (string) $this->firm_name;
+    }
+
+    public function scopeLawFirms(Builder $query): Builder
+    {
+        return $query
+            ->where(function (Builder $q): void {
+                $q->whereNull('account_type')->orWhere('account_type', '!=', 'individual');
+            })
+            ->where(function (Builder $q): void {
+                $q->whereNull('plan')->orWhere('plan', '!=', 'starter');
+            });
+    }
+
     public function owner(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsTo(User::class, 'owner_id');
+        return $this->belongsTo(User::class, 'owner_id')->withoutGlobalScopes();
     }
 
     public function subscription(): \Illuminate\Database\Eloquent\Relations\HasOne
@@ -159,5 +208,10 @@ class Firm extends Model
     {
         // Relation must ignore FirmScope so platform portal can count/list firm members.
         return $this->hasMany(User::class)->withoutGlobalScopes();
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class)->withoutGlobalScopes();
     }
 }

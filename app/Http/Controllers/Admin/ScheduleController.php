@@ -53,7 +53,7 @@ class ScheduleController extends Controller implements HasMiddleware
                     'firm_id' => $user->firm_id,
                     'title' => $user->isIndividual() ? 'Individual Lawyer' : 'Lawyer',
                     'status' => 'active',
-                    'country' => 'US',
+                    'country' => null,
                     'specialties' => [],
                 ]);
             }
@@ -66,15 +66,18 @@ class ScheduleController extends Controller implements HasMiddleware
         $services = Service::query()->active()->orderBy('name')->get();
 
         $tones = ['mint', 'blue', 'violet', 'amber', 'rose'];
+        $firmNow = app(\App\Domain\Scheduling\FirmTime::class)->now();
         // Show every appointment (pending, completed, cancelled, …) with its status.
         $appointments = Appointment::query()
-            ->with(['lawyer.user', 'service', 'client', 'lead'])
+            ->with(['firm', 'lawyer.user', 'service', 'client', 'lead'])
             ->where('start_at', '>=', now()->subMonths(2)->startOfDay())
             ->where('start_at', '<=', now()->addMonths(4)->endOfDay())
             ->orderBy('start_at')
             ->get()
             ->map(function (Appointment $appointment) use ($tones) {
                 $status = $appointment->status?->value ?? (string) $appointment->status;
+                $localStart = $appointment->localStartAt();
+                $localEnd = $appointment->localEndAt();
 
                 return [
                     'id' => $appointment->id,
@@ -82,10 +85,10 @@ class ScheduleController extends Controller implements HasMiddleware
                         ?: $appointment->lead?->name
                         ?: $appointment->lead?->phone
                         ?: 'Appointment',
-                    'start' => $appointment->start_at?->toIso8601String(),
-                    'end' => $appointment->end_at?->toIso8601String(),
-                    'date' => $appointment->start_at?->toDateString(),
-                    'time' => $appointment->start_at?->format('g:i A'),
+                    'start' => $localStart?->toIso8601String(),
+                    'end' => $localEnd?->toIso8601String(),
+                    'date' => $localStart?->toDateString(),
+                    'time' => $localStart?->format('g:i A'),
                     'status' => $status,
                     'status_label' => str_replace('_', ' ', $status),
                     'service_id' => $appointment->service_id,
@@ -107,7 +110,7 @@ class ScheduleController extends Controller implements HasMiddleware
             'holidays' => Holiday::query()->orderBy('date')->get(),
             'filters' => [
                 'view' => $request->string('view')->toString() ?: 'week',
-                'date' => $request->string('date')->toString() ?: now()->toDateString(),
+                'date' => $request->string('date')->toString() ?: $firmNow->toDateString(),
                 'service_id' => $request->input('service_id'),
                 'lawyer_id' => $request->input('lawyer_id'),
             ],
@@ -146,7 +149,7 @@ class ScheduleController extends Controller implements HasMiddleware
                     'firm_id' => $user->firm_id,
                     'title' => $user->isIndividual() ? 'Individual Lawyer' : 'Lawyer',
                     'status' => 'active',
-                    'country' => 'US',
+                    'country' => null,
                     'specialties' => [],
                 ]);
             }

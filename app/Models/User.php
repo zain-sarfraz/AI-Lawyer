@@ -81,6 +81,26 @@ class User extends Authenticatable
         return $this->account_type === 'firm' || $this->isFirmAdmin();
     }
 
+    /**
+     * Human-readable account role label shown in navigation and admin tables.
+     */
+    public function displayRoleLabel(): string
+    {
+        if ($this->isSuperAdmin()) {
+            return 'Superadmin';
+        }
+
+        if ($this->isIndividual() || (! $this->isFirmAdmin() && ($this->firm?->isIndividualAccount() ?? false))) {
+            return 'Individual Lawyer';
+        }
+
+        if ($this->isFirmAdmin()) {
+            return 'Firm Admin';
+        }
+
+        return $this->getRoleNames()->first() ?: 'Team';
+    }
+
     public function hasActiveSubscription(): bool
     {
         if ($this->subscription && $this->subscription->isActive()) {

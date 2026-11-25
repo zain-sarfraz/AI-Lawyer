@@ -7,6 +7,10 @@
     $status = $member->status?->value ?? 'inactive';
     $initials = strtoupper(collect(explode(' ', $member->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode(''));
     $cases = $member->lawyer?->legalCases ?? collect();
+    $lawyerCountry = strtoupper((string) ($member->lawyer?->country ?? ''));
+    $lawyerDial = $lawyerCountry ? \App\Support\Phone\PhoneNormalizer::dialCode($lawyerCountry) : '';
+    $lawyerCountryName = $lawyerCountry ? \App\Support\Phone\PhoneNormalizer::countryLabel($lawyerCountry) : '—';
+    $assignedJurisdictions = $member->lawyer?->jurisdictions ?? collect();
 @endphp
 
 <div class="mb-4">
@@ -37,6 +41,30 @@
             <div><dt class="text-slate-500">Assigned role</dt><dd class="font-medium">{{ $member->getRoleNames()->first() ?: 'Lawyer' }}</dd></div>
             <div><dt class="text-slate-500">Joining date</dt><dd class="font-medium">{{ optional($member->created_at)->format('M j, Y') }}</dd></div>
             <div><dt class="text-slate-500">Title</dt><dd class="font-medium">{{ $member->lawyer?->title ?: '—' }}</dd></div>
+            <div>
+                <dt class="text-slate-500">Country Code</dt>
+                <dd class="font-medium">
+                    @if ($lawyerCountry)
+                        {{ $lawyerCountryName }} ({{ $lawyerCountry }}@if($lawyerDial) · {{ $lawyerDial }}@endif)
+                    @else
+                        —
+                    @endif
+                </dd>
+            </div>
+            <div>
+                <dt class="text-slate-500">Case Jurisdictions</dt>
+                <dd class="font-medium">
+                    @if ($assignedJurisdictions->isEmpty())
+                        <span class="text-slate-400">None assigned</span>
+                    @else
+                        <div class="mt-1 flex flex-wrap gap-1.5">
+                            @foreach ($assignedJurisdictions as $jur)
+                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200">{{ $jur->country_code }} · {{ $jur->code }}</span>
+                            @endforeach
+                        </div>
+                    @endif
+                </dd>
+            </div>
         </dl>
     </x-legal.card>
 
@@ -75,13 +103,13 @@
                 <input class="ui-field" type="email" name="email" value="{{ old('email', $member->email) }}" required>
             </div>
             <div class="col-12 col-md-6">
-                <label class="ui-label">Phone</label>
-                <input class="ui-field" name="phone" value="{{ old('phone', $member->lawyer?->phone) }}">
-            </div>
-            <div class="col-12 col-md-6">
                 <label class="ui-label">Title</label>
                 <input class="ui-field" name="title" value="{{ old('title', $member->lawyer?->title) }}">
             </div>
+            @include('firm-admin.lawyers._practice-fields', [
+                'lawyer' => $member->lawyer,
+                'activeJurisdictions' => $activeJurisdictions ?? [],
+            ])
             <div class="col-12 col-md-6">
                 <label class="ui-label">New password</label>
                 <input class="ui-field" type="password" name="password" minlength="8">

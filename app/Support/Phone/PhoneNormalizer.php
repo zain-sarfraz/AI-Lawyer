@@ -6,14 +6,38 @@ use InvalidArgumentException;
 
 final class PhoneNormalizer
 {
-    /** @var array<string, array{dial: string, min: int, max: int}> */
+    /** @var array<string, array{dial: string, min: int, max: int, label: string}> */
     private const RULES = [
-        'PK' => ['dial' => '+92', 'min' => 10, 'max' => 10],
-        'GB' => ['dial' => '+44', 'min' => 10, 'max' => 10],
-        'US' => ['dial' => '+1', 'min' => 10, 'max' => 10],
-        'CA' => ['dial' => '+1', 'min' => 10, 'max' => 10],
-        'AU' => ['dial' => '+61', 'min' => 9, 'max' => 9],
+        'PK' => ['dial' => '+92', 'min' => 10, 'max' => 10, 'label' => 'Pakistan'],
+        'GB' => ['dial' => '+44', 'min' => 10, 'max' => 10, 'label' => 'United Kingdom'],
+        'US' => ['dial' => '+1', 'min' => 10, 'max' => 10, 'label' => 'United States'],
+        'CA' => ['dial' => '+1', 'min' => 10, 'max' => 10, 'label' => 'Canada'],
+        'AU' => ['dial' => '+61', 'min' => 9, 'max' => 9, 'label' => 'Australia'],
     ];
+
+    /** @return list<string> */
+    public static function supportedCountries(): array
+    {
+        return array_keys(self::RULES);
+    }
+
+    /** @return array<string, string> */
+    public static function countryLabels(): array
+    {
+        $labels = [];
+        foreach (self::RULES as $code => $rule) {
+            $labels[$code] = $rule['label'];
+        }
+
+        return $labels;
+    }
+
+    public static function countryLabel(?string $countryCode): string
+    {
+        $code = strtoupper(trim((string) $countryCode));
+
+        return self::RULES[$code]['label'] ?? $code;
+    }
 
     public static function dialCode(string $countryCode): string
     {

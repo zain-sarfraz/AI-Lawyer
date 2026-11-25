@@ -64,8 +64,8 @@ class FineTunerWebhookController extends Controller
                         'provider_call_id' => $call->provider_call_id,
                     ],
                     'prompt_variables' => [
-                        'firm_name' => $firm->firm_name,
-                        'receptionist_name' => $firm->receptionist_name ?: 'Alex',
+                        'firm_name' => $firm->firm_name ?: 'our law office',
+                        'receptionist_name' => $firm->receptionist_name ?: 'AI Assistant',
                     ],
                 ],
             ]);
@@ -85,7 +85,7 @@ class FineTunerWebhookController extends Controller
             return response()->json(['error' => 'Firm not found'], 404);
         }
 
-        return app(FirmContext::class)->run((int) $firm->id, function () use ($payload) {
+        return app(FirmContext::class)->run((int) $firm->id, function () use ($payload, $firm) {
             $callId = (string) (
                 data_get($payload, 'call.call_id')
                 ?? data_get($payload, 'call_id')
@@ -104,6 +104,7 @@ class FineTunerWebhookController extends Controller
             );
 
             $call = Call::query()->withoutGlobalScope(FirmScope::class)
+                ->where('firm_id', $firm->id)
                 ->where('provider_call_id', $callId)
                 ->first();
 
@@ -198,7 +199,6 @@ class FineTunerWebhookController extends Controller
             data_get($payload, 'call.model_id')
             ?? data_get($payload, 'model_id')
             ?? data_get($payload, 'call_inbound.model_id')
-            ?? config('services.synthflow.agent_id')
             ?? ''
         );
 
@@ -222,7 +222,6 @@ class FineTunerWebhookController extends Controller
             ?? data_get($payload, 'phone_number')
             ?? data_get($payload, 'call_inbound.to_number')
             ?? data_get($payload, 'call.phone_number')
-            ?? config('services.synthflow.agent_phone')
             ?? ''
         );
         if ($to !== '') {
@@ -232,13 +231,8 @@ class FineTunerWebhookController extends Controller
             }
         }
 
-        if (app()->environment('local', 'testing')) {
-            $firmWithServices = Firm::query()
-                ->whereHas('services')
-                ->orderByDesc('id')
-                ->first();
-
-            return $firmWithServices ?: Firm::query()->orderByDesc('id')->first();
+        if (app()->environment('local', 'testing') && Firm::query()->count() === 1) {
+            return Firm::query()->orderBy('id')->first();
         }
 
         return null;

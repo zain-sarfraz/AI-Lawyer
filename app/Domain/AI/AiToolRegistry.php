@@ -8,6 +8,7 @@ use App\Domain\CRM\LeadService;
 use App\Domain\Firm\FirmService;
 use App\Domain\Integrations\TwilioService;
 use App\Domain\Scheduling\AvailabilityService;
+use App\Domain\Scheduling\FirmTime;
 use App\Jobs\SendAppointmentConfirmationJob;
 use App\Models\AiSession;
 use App\Models\AiToolCall;
@@ -18,6 +19,7 @@ use App\Models\KnowledgeBaseItem;
 use App\Models\Lawyer;
 use App\Models\Scopes\FirmScope;
 use App\Models\Service;
+use App\Support\SpokenFormat;
 use Carbon\Carbon;
 
 class AiToolRegistry
@@ -68,7 +70,7 @@ class AiToolRegistry
                 'list_available_days' => $this->listAvailableDays($arguments),
                 'find_available_slots' => $this->findAvailableSlots($arguments),
                 'find_caller' => $this->findCaller($arguments),
-                'create_or_update_lead' => $this->createOrUpdateLead($arguments),
+                'create_or_update_lead' => $this->createOrUpdateLead($arguments, $session),
                 'book_appointment' => $this->bookAppointment($arguments, $session),
                 'reschedule_appointment' => $this->rescheduleAppointment($arguments),
                 'cancel_appointment' => $this->cancelAppointment($arguments),
@@ -120,29 +122,49 @@ class AiToolRegistry
 
     private function getServices(array $args): array
     {
-        $query = Service::query()->aiVisible()->with('category');
+        $firm = $this->firmService->current();
+        $query = Service::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $firm->id)
+            ->where('status', 'active')
+            ->where('ai_enabled', true)
+            ->with('category');
         if (! empty($args['category'])) {
             $query->whereHas('category', fn ($q) => $q->where('name', 'like', '%'.$args['category'].'%'));
         }
 
-        $services = $query->with('lawyers.user')->get();
-        $rows = $services->values()->map(function (Service $s) {
+        $services = $query->with([
+            'lawyers' => fn ($q) => $q->withoutGlobalScopes()
+                ->where('lawyers.firm_id', $firm->id)
+                ->where('lawyers.status', 'active')
+                ->with('user'),
+        ])->get();
+
+        $hasAnyActiveLawyers = Lawyer::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $firm->id)
+            ->where('status', 'active')
+            ->exists();
+
+        $rows = $services->values()->map(function (Service $s) use ($firm) {
             $lawyers = $s->lawyers->map(fn (Lawyer $l) => [
                 'id' => $l->id,
                 'name' => $l->displayName(),
                 'title' => $l->title,
             ])->values()->all();
-            $feeLabel = trim(($s->currency ?: '').' '.number_format((float) $s->price, 2));
+            $currency = (string) ($s->currency ?: $firm->currency ?: 'USD');
+            $feeLabel = SpokenFormat::money($s->price, $currency);
             $lawyerNames = $lawyers === []
-                ? 'to be assigned'
+                ? 'an available lawyer'
                 : implode(', ', array_map(fn (array $l) => $l['name'], $lawyers));
+
             return [
                 'id' => $s->id,
                 'name' => $s->name,
                 'category' => $s->category?->name,
                 'short_description' => str($s->description)->limit(160)->toString(),
                 'price' => (string) $s->price,
-                'currency' => $s->currency,
+                'currency' => $currency,
                 'fee_label' => $feeLabel,
                 'duration_minutes' => $s->duration_minutes,
                 'lawyers' => $lawyers,
@@ -150,8 +172,8 @@ class AiToolRegistry
             ];
         })->all();
 
-        $menu = $rows === []
-            ? 'No services are available right now.'
+        $menu = ($rows === [] || ! $hasAnyActiveLawyers)
+            ? "I'm sorry, I can't take bookings right now, but I can have the team call you back. Could you share your name, please?"
             : ('We offer '
                 .$this->naturalJoin(array_map(fn (array $row) => $row['speak'], $rows))
                 .'. Which service would you like?');
@@ -166,9 +188,20 @@ class AiToolRegistry
 
     private function getServiceDetails(array $args): array
     {
-        // Synthflow may pass service_id as a string variable — cast to int
+        $firm = $this->firmService->current();
         $serviceId = isset($args['service_id']) ? (int) $args['service_id'] : null;
-        $service = Service::query()->aiVisible()->with('lawyers.user')->find($serviceId);
+        $service = Service::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $firm->id)
+            ->where('status', 'active')
+            ->where('ai_enabled', true)
+            ->with([
+                'lawyers' => fn ($q) => $q->withoutGlobalScopes()
+                    ->where('lawyers.firm_id', $firm->id)
+                    ->where('lawyers.status', 'active')
+                    ->with('user'),
+            ])
+            ->find($serviceId);
         if (! $service) {
             return ['error' => 'NOT_FOUND', 'message' => 'Service not available. Please call get_services first to get the correct service_id.'];
         }
@@ -180,42 +213,57 @@ class AiToolRegistry
             'specialties' => $l->specialties ?? [],
         ])->values()->all();
 
+        $currency = (string) ($service->currency ?: $firm->currency ?: 'USD');
+        $spokenFee = SpokenFormat::money($service->price, $currency);
+        $duration = (int) ($service->duration_minutes ?? 0);
+        $lawyerNames = $lawyers === []
+            ? 'an available lawyer'
+            : $this->naturalJoin(array_map(fn (array $l) => $l['name'], $lawyers));
+
+        $durationClause = $duration > 0 ? sprintf(' for %d minutes', $duration) : '';
+        $speak = sprintf(
+            '%s is %s%s with %s. Would you like to book a consultation for %s?',
+            $service->name,
+            $spokenFee,
+            $durationClause,
+            $lawyerNames,
+            $service->name,
+        );
+
         return [
             'id' => $service->id,
             'name' => $service->name,
             'description' => $service->description,
             'price' => (string) $service->price,
-            'currency' => $service->currency,
-            'fee_label' => trim(($service->currency ?: '').' '.number_format((float) $service->price, 2)),
-            'duration_minutes' => $service->duration_minutes,
+            'currency' => $currency,
+            'fee_label' => $spokenFee,
+            'duration_minutes' => $duration > 0 ? $duration : null,
             'booking_enabled' => $service->booking_enabled,
             'lawyers' => $lawyers,
-            'speak' => sprintf(
-                '%s costs %s for about %d minutes. Lawyer(s): %s. Next I need your full name and phone number, then I will tell you which days are open.',
-                $service->name,
-                trim(($service->currency ?: '').' '.number_format((float) $service->price, 2)),
-                (int) $service->duration_minutes,
-                $lawyers === []
-                    ? 'to be assigned'
-                    : implode(', ', array_map(fn (array $l) => $l['name'], $lawyers)),
-            ),
-            'next_step' => 'Collect name and phone, then call list_available_days. Ask for a day name, not an option number.',
+            'speak' => $speak,
+            'next_step' => 'Ask if they would like to book this consultation and wait for confirmation.',
         ];
     }
 
     private function getLawyers(array $args): array
     {
-        $query = Lawyer::query()->active()->with('user');
+        $firm = $this->firmService->current();
+        $query = Lawyer::query()
+            ->withoutGlobalScopes()
+            ->where('firm_id', $firm->id)
+            ->where('status', 'active')
+            ->with('user');
         if (! empty($args['service_id'])) {
-            // Cast to int — Synthflow may send as string
             $serviceId = (int) $args['service_id'];
-            $query->whereHas('services', fn ($q) => $q->where('services.id', $serviceId));
+            $query->whereHas('services', fn ($q) => $q->withoutGlobalScopes()
+                ->where('services.firm_id', $firm->id)
+                ->where('services.id', $serviceId));
         }
 
         return $query->get()->map(function (Lawyer $l) {
             $hours = $this->availability->weeklyHoursSummary($l);
             $speakHours = $hours === []
-                ? 'no weekly availability set yet'
+                ? 'no weekly hours configured'
                 : implode('; ', array_map(
                     fn (array $h) => $h['weekday'].' '.$h['start_label'].' to '.$h['end_label'],
                     $hours,
@@ -227,8 +275,7 @@ class AiToolRegistry
                 'title' => $l->title,
                 'specialties' => $l->specialties ?? [],
                 'weekly_hours' => $hours,
-                'slot_minutes' => AvailabilityService::slotMinutesFor(),
-                'speak' => $l->displayName().' is usually available: '.$speakHours.'. Appointments are '.AvailabilityService::slotMinutesFor().' minutes.',
+                'speak' => $l->displayName().' is usually available '.$speakHours.'.',
             ];
         })->all();
     }
@@ -323,11 +370,15 @@ class AiToolRegistry
             $windows,
         ));
 
+        $serviceDuration = (int) ($service->duration_minutes ?? 0);
+        $durationClause = $serviceDuration > 0
+            ? ' Consultations are '.$serviceDuration.' minutes.'
+            : '';
+
         $speak = 'On '.$date->format('l, M j').', '
             .($lawyer?->displayName() ?: 'the lawyer')
             .' is available from '.$windowSpeak
-            .'. Consultations are '.AvailabilityService::slotMinutesFor()
-            .' minutes. What time would you like?';
+            .'.'.$durationClause.' What time would you like?';
 
         return [
             // Keep slots for booking match; do not read them aloud.
@@ -338,7 +389,7 @@ class AiToolRegistry
             'all_slot_count' => count($slots),
             'date' => $date->toDateString(),
             'count' => count($slots),
-            'slot_minutes' => AvailabilityService::slotMinutesFor(),
+            'duration_minutes' => $serviceDuration > 0 ? $serviceDuration : null,
             'menu' => $speak,
             'speak' => $speak,
             'next_step' => 'Ask the caller to choose any time within the availability window. Map their time to the nearest matching slots[].start_at, then book. Never list individual slot options aloud.',
@@ -428,8 +479,12 @@ class AiToolRegistry
         ];
     }
 
-    private function createOrUpdateLead(array $args): array
+    private function createOrUpdateLead(array $args, ?AiSession $session = null): array
     {
+        $resolvedPhone = $this->resolveCallerPhone($args, $session);
+        if ($resolvedPhone !== '') {
+            $args['phone'] = $resolvedPhone;
+        }
         $lead = $this->leads->createOrUpdateFromCaller($args);
 
         return [
@@ -441,6 +496,8 @@ class AiToolRegistry
 
     private function bookAppointment(array $args, ?AiSession $session = null): array
     {
+        $firm = $this->firmService->current();
+
         // Always attach the live call so the appointment shows as call-booked.
         if ($session?->call_id && empty($args['call_id'])) {
             $args['call_id'] = $session->call_id;
@@ -451,6 +508,7 @@ class AiToolRegistry
             if ($providerCallId !== '') {
                 $callId = Call::query()
                     ->withoutGlobalScope(FirmScope::class)
+                    ->where('firm_id', $firm->id)
                     ->where('provider_call_id', $providerCallId)
                     ->value('id');
                 if ($callId) {
@@ -471,21 +529,8 @@ class AiToolRegistry
             }
         }
 
-        // Normalize fields from Synthflow:
-        // Synthflow may send phone as array/object: e.g. ["value" => "+92300..."]
-        if (isset($args['phone'])) {
-            if (is_array($args['phone'])) {
-                $args['phone'] = (string) (
-                    $args['phone']['value']
-                    ?? $args['phone']['number']
-                    ?? $args['phone']['phone']
-                    ?? reset($args['phone'])
-                    ?? ''
-                );
-            } else {
-                $args['phone'] = (string) $args['phone'];
-            }
-        }
+        // Normalize fields from Synthflow (including customer_phone and "same").
+        $args['phone'] = $this->resolveCallerPhone($args, $session);
 
         if (isset($args['name']) && is_array($args['name'])) {
             $args['name'] = (string) ($args['name']['value'] ?? reset($args['name']) ?? '');
@@ -514,11 +559,13 @@ class AiToolRegistry
             ];
         }
 
-        $result = $this->booking->book($args)->toArray();
+        $booking = $this->booking->book($args);
+        $result = $booking->toArray();
 
         if (($result['success'] ?? false) && ! empty($args['call_id'])) {
             Call::query()
                 ->withoutGlobalScope(FirmScope::class)
+                ->where('firm_id', $firm->id)
                 ->whereKey((int) $args['call_id'])
                 ->update([
                     'outcome' => 'appointment_booked',
@@ -527,7 +574,73 @@ class AiToolRegistry
                 ]);
         }
 
+        if (($result['success'] ?? false) && $booking->appointment) {
+            $appt = $booking->appointment;
+            $localStart = app(FirmTime::class)->toFirm($appt->start_at, $firm);
+            $serviceName = $appt->service?->name ?: 'your consultation';
+            $lawyerName = $appt->lawyer?->displayName() ?: 'our lawyer';
+            $result['speak'] = sprintf(
+                'Your consultation for %s with %s is booked and confirmed for %s at %s.',
+                $serviceName,
+                $lawyerName,
+                $localStart->format('l, F j'),
+                $localStart->format('g:i A'),
+            );
+        }
+
         return $result;
+    }
+
+    private function resolveCallerPhone(array $args, ?AiSession $session = null): string
+    {
+        $raw = $args['phone'] ?? $args['customer_phone'] ?? '';
+        if (is_array($raw)) {
+            $raw = (string) ($raw['value'] ?? $raw['number'] ?? $raw['phone'] ?? reset($raw) ?? '');
+        }
+        $phone = trim((string) $raw);
+        $normalized = strtolower(preg_replace('/\s+/', ' ', $phone) ?: '');
+
+        $samePhrases = [
+            'same',
+            'same number',
+            'this number',
+            'the one i am calling from',
+            "the one i'm calling from",
+            'caller id',
+        ];
+
+        if ($phone !== '' && ! in_array($normalized, $samePhrases, true)) {
+            return $phone;
+        }
+
+        if (! empty($session?->call?->caller_phone)) {
+            return (string) $session->call->caller_phone;
+        }
+
+        $firm = $this->firmService->current();
+        if (! empty($args['call_id'])) {
+            $found = Call::query()
+                ->withoutGlobalScope(FirmScope::class)
+                ->where('firm_id', $firm->id)
+                ->whereKey((int) $args['call_id'])
+                ->value('caller_phone');
+            if ($found) {
+                return (string) $found;
+            }
+        }
+
+        if (! empty($args['provider_call_id'])) {
+            $found = Call::query()
+                ->withoutGlobalScope(FirmScope::class)
+                ->where('firm_id', $firm->id)
+                ->where('provider_call_id', (string) $args['provider_call_id'])
+                ->value('caller_phone');
+            if ($found) {
+                return (string) $found;
+            }
+        }
+
+        return $phone;
     }
 
     private function rescheduleAppointment(array $args): array
@@ -597,6 +710,10 @@ class AiToolRegistry
 
     private function createCallbackRequest(array $args, ?AiSession $session): array
     {
+        $resolvedPhone = $this->resolveCallerPhone($args, $session);
+        if ($resolvedPhone !== '') {
+            $args['phone'] = $resolvedPhone;
+        }
         $lead = $this->leads->createOrUpdateFromCaller([
             'name' => $args['name'] ?? null,
             'phone' => $args['phone'] ?? null,

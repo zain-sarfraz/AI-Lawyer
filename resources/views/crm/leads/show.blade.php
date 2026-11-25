@@ -53,7 +53,7 @@
             @forelse($lead->appointments as $appt)
                 <div class="legal-list-item">
                     <div>
-                        <div class="fw-semibold">{{ $appt->start_at?->format('D, M j · g:i A') }}</div>
+                        <div class="fw-semibold">{{ $appt->localStartAt()?->format('D, M j · g:i A') }}</div>
                         <div class="small ui-muted">{{ $appt->service?->name ?: 'Consultation' }}</div>
                     </div>
                     <x-legal.badge tone="navy">{{ $appt->status?->value }}</x-legal.badge>
@@ -94,7 +94,7 @@
                         $events->push([
                             'at' => $appt->created_at ?? $appt->start_at,
                             'title' => 'Appointment ' . ($appt->status?->value ?? 'scheduled'),
-                            'detail' => ($appt->service?->name ?: 'Consultation') . ' · ' . optional($appt->start_at)->format('M j, g:i A'),
+                            'detail' => ($appt->service?->name ?: 'Consultation') . ' · ' . optional($appt->localStartAt())->format('M j, g:i A'),
                         ]);
                     }
                     if ($lead->created_at) {

@@ -5,8 +5,10 @@
 @section('content')
 @php
     $next = $nextAppointment ?? $upcomingAppointments->first();
-    $nextDate = $next?->start_at ? $next->start_at->format('D, M j') : null;
-    $nextTime = $next?->start_at ? ($next->start_at->format('g:i A') . ' – ' . optional($next->end_at)->format('g:i A')) : null;
+    $nextLocalStart = $next?->localStartAt();
+    $nextLocalEnd = $next?->localEndAt();
+    $nextDate = $nextLocalStart ? $nextLocalStart->format('D, M j') : null;
+    $nextTime = $nextLocalStart ? ($nextLocalStart->format('g:i A') . ' – ' . optional($nextLocalEnd)->format('g:i A')) : null;
     $nextClient = $next?->client?->name ?: ($next?->lead?->name ?: 'Caller');
     $nextService = $next?->service?->name ?: ($next?->appointmentType?->name ?: 'Consultation');
     $nextInitial = mb_strtoupper(mb_substr($nextClient, 0, 1));
@@ -17,7 +19,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="font-display text-2xl sm:text-3xl font-extrabold text-(--ink) tracking-tight">{{ $greeting }}</h1>
-            <p class="text-sm text-(--muted) mt-0.5">{{ $roleLabel }} desk at {{ $firmShort }}. Your appointments and records at a glance.</p>
+            <p class="text-sm text-(--muted) mt-0.5">{{ ($isIndividual ?? false) ? 'Individual Lawyer desk' : "{$roleLabel} desk at {$firmShort}" }}. Your appointments and records at a glance.</p>
         </div>
         <div class="flex items-center gap-2.5">
             <a href="{{ route('cases.index') }}" 
@@ -120,12 +122,14 @@
                                     $type = $appt->service?->name ?: ($appt->appointmentType?->name ?: 'Consultation');
                                     $status = strtolower((string) ($appt->status?->value ?? $appt->status ?? 'pending'));
                                     $isConfirmed = in_array($status, ['confirmed', 'scheduled', 'completed'], true);
+                                    $localStart = $appt->localStartAt();
+                                    $localEnd = $appt->localEndAt();
                                 @endphp
                                 <tr class="hover:bg-slate-500/[0.02]">
                                     <td class="py-3.5 pr-3">
-                                        <div class="font-bold text-(--ink)">{{ optional($appt->start_at)->format('D, M j') }}</div>
+                                        <div class="font-bold text-(--ink)">{{ optional($localStart)->format('D, M j') }}</div>
                                         <div class="text-[11px] text-(--muted) mt-0.5">
-                                            {{ optional($appt->start_at)->format('g:i A') }} – {{ optional($appt->end_at)->format('g:i A') }}
+                                            {{ optional($localStart)->format('g:i A') }} – {{ optional($localEnd)->format('g:i A') }}
                                         </div>
                                     </td>
                                     <td class="py-3.5 pr-3 font-bold text-(--ink)">{{ $with }}</td>

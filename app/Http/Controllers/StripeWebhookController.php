@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Billing\PlanCatalog;
 use App\Domain\Billing\StripePaymentService;
+use App\Domain\Lawyers\LawyerService;
 use App\Enums\UserStatus;
 use App\Mail\SubscriptionWelcomeMail;
 use App\Models\Firm;
@@ -27,6 +28,7 @@ class StripeWebhookController extends Controller
     public function __construct(
         private readonly StripePaymentService $stripe,
         private readonly PlanCatalog $plans,
+        private readonly LawyerService $lawyers,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -120,24 +122,11 @@ class StripeWebhookController extends Controller
 
             // Activate User
             $user->status = UserStatus::Active;
+            $user->email_verified_at ??= now();
             $user->pending_plan = null;
             $user->pending_interval = null;
             $user->stripe_customer_id = $customerId;
             $user->save();
-
-            // Setup Lawyer profile based on account type
-            if ($user->account_type === 'individual' || $user->role === 'individual_lawyer') {
-                Lawyer::firstOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'firm_id' => null,
-                        'title' => 'Individual Lawyer',
-                        'status' => 'active',
-                        'country' => 'US',
-                        'specialties' => [],
-                    ]
-                );
-            }
 
             // Activate Firm if this is a firm account
             $firm = null;
@@ -155,31 +144,11 @@ class StripeWebhookController extends Controller
                     $firm->save();
 
                     // Ensure firm admin lawyer profile exists
-                    app(\App\Domain\Firm\FirmContext::class)->run($firm->id, function () use ($user, $firm) {
-                        Lawyer::firstOrCreate(
-                            ['user_id' => $user->id],
-                            [
-                                'firm_id' => $firm->id,
-                                'title' => 'Firm Admin',
-                                'status' => 'active',
-                                'country' => 'US',
-                                'specialties' => [],
-                            ]
-                        );
-                    });
+                    $this->lawyers->provisionForActivatedUser($user, (int) $firm->id, 'Firm Admin');
                 }
             } else {
                 // Individual lawyer profile provisioned on activation
-                Lawyer::withoutGlobalScopes()->firstOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'firm_id' => null,
-                        'title' => 'Individual Lawyer',
-                        'status' => 'active',
-                        'country' => 'US',
-                        'specialties' => [],
-                    ]
-                );
+                $this->lawyers->provisionForActivatedUser($user, null, 'Individual Lawyer');
             }
 
             // Save active subscription record

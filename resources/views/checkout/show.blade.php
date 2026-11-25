@@ -435,10 +435,22 @@
                         </div>
                     @endif
 
-                    <div class="field">
-                        <label for="phone">Phone number (optional)</label>
-                        <input id="phone" name="phone" type="tel" value="{{ old('phone') }}" autocomplete="tel" placeholder="+1 (555) 000-0000">
-                        @error('phone') <div class="error">{{ $message }}</div> @enderror
+                    <div class="row2">
+                        <div class="field">
+                            <label for="country">Country Code</label>
+                            <select id="country" name="country" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 14px;font:inherit;font-size:14.5px;color:var(--ink);background:#fff;">
+                                <option value="">Select country code…</option>
+                                @foreach (($countryLabels ?? ['US' => 'United States', 'PK' => 'Pakistan', 'GB' => 'United Kingdom', 'CA' => 'Canada', 'AU' => 'Australia']) as $cCode => $cName)
+                                    <option value="{{ $cCode }}" @selected(old('country') === $cCode)>{{ $cCode }} — {{ $cName }} ({{ \App\Support\Phone\PhoneNormalizer::dialCode($cCode) }})</option>
+                                @endforeach
+                            </select>
+                            @error('country') <div class="error">{{ $message }}</div> @enderror
+                        </div>
+                        <div class="field">
+                            <label for="phone">Phone number (optional)</label>
+                            <input id="phone" name="phone" type="tel" value="{{ old('phone') }}" autocomplete="tel" placeholder="3247087907 or +15550000">
+                            @error('phone') <div class="error">{{ $message }}</div> @enderror
+                        </div>
                     </div>
 
                     <div class="row2">

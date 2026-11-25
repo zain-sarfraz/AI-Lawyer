@@ -80,6 +80,7 @@ class LawyerController extends Controller
         return view('firm-admin.lawyers.show', [
             'member' => $user,
             'firm' => Firm::current(),
+            'activeJurisdictions' => Jurisdiction::activeGroupedByCountry(),
         ]);
     }
 

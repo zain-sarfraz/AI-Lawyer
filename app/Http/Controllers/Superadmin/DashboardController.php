@@ -87,7 +87,7 @@ class DashboardController extends Controller
             $cancelledAppts = (int) $firmAppts->filter(fn ($r) => in_array($getStatusVal($r), ['cancelled', 'no_show'], true))->sum('count');
             $totalFees = (float) $firmAppts->sum('total_fees');
 
-            $roleName = $admin->getRoleNames()->first() ?? 'Lawyer';
+            $roleName = $admin->displayRoleLabel();
             $statusVal = $admin->status?->value ?? (string) $admin->status;
 
             return [
@@ -98,7 +98,7 @@ class DashboardController extends Controller
                 'role' => $roleName,
                 'status' => $statusVal ?: 'active',
                 'firm_id' => $firmId,
-                'firm_name' => $admin->firm?->firm_name ?? 'Firm #'.$firmId,
+                'firm_name' => $admin->firm?->isIndividualAccount() ? 'Individual' : ($admin->firm?->firm_name ?? 'Firm #'.$firmId),
                 'firm_status' => $admin->firm?->status ?? 'active',
                 'firm_timezone' => $admin->firm?->timezone ?? 'Asia/Karachi',
                 'total_appointments' => $totalAppts,
@@ -207,7 +207,7 @@ class DashboardController extends Controller
             return [
                 'id' => $appt->id,
                 'firm_id' => (int) $appt->firm_id,
-                'firm_name' => $appt->firm?->firm_name ?? 'Firm #'.$appt->firm_id,
+                'firm_name' => $appt->firm?->isIndividualAccount() ? 'Individual' : ($appt->firm?->firm_name ?? 'Firm #'.$appt->firm_id),
                 'admin_id' => (int) $adminId,
                 'admin_name' => $adminName,
                 'date' => $dateFormatted,

@@ -26,6 +26,7 @@ use App\Http\Controllers\FirmAdmin\DashboardController as FirmDashboardControlle
 use App\Http\Controllers\FirmAdmin\LawyerController as FirmLawyerController;
 use App\Http\Controllers\InvitationAcceptController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Superadmin\AppointmentController as SuperadminAppointmentController;
 use App\Http\Controllers\Superadmin\DashboardController as SuperadminDashboardController;
 use App\Http\Controllers\Superadmin\FirmController as SuperadminFirmController;
 use App\Http\Controllers\Superadmin\LawyerController as SuperadminLawyerController;
@@ -77,6 +78,8 @@ Route::middleware(['auth', 'verified', 'active', 'superadmin'])->prefix('superad
     Route::post('lawyers', [SuperadminLawyerController::class, 'store'])->name('lawyers.store');
     Route::put('lawyers/{lawyer}', [SuperadminLawyerController::class, 'update'])->name('lawyers.update');
     Route::delete('lawyers/{lawyer}', [SuperadminLawyerController::class, 'destroy'])->name('lawyers.destroy');
+
+    Route::get('appointments', [SuperadminAppointmentController::class, 'index'])->name('appointments.index');
 
     Route::get('settings', [SuperadminSettingsController::class, 'edit'])->name('settings.edit');
     Route::put('settings', [SuperadminSettingsController::class, 'update'])->name('settings.update');

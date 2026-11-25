@@ -579,7 +579,8 @@
                 <span>Lawyers</span>
             </a>
 
-            <a href="{{ route('superadmin.dashboard') }}#appointments" class="sa-nav-item">
+            @php $isAppointments = request()->routeIs('superadmin.appointments.*'); @endphp
+            <a href="{{ route('superadmin.appointments.index') }}" class="sa-nav-item {{ $isAppointments ? 'active' : '' }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                     <line x1="16" y1="2" x2="16" y2="6"/>

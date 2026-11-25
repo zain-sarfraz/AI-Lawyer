@@ -89,7 +89,7 @@ class FirmContext
      * @param  callable(): T  $callback
      * @return T
      */
-    public function run(int $firmId, callable $callback): mixed
+    public function run(?int $firmId, callable $callback): mixed
     {
         $previous = $this->firmId;
         $this->firmId = $firmId;

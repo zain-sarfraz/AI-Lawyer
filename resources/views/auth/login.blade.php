@@ -74,49 +74,37 @@
             </button>
         </form>
 
-        <!-- Quick Superadmin Autofill Button -->
-        <button
-            type="button"
-            @click="fill('admin@admin.com', '11223344')"
-            style="margin-top: 24px; width: 100%; border-radius: 14px; border: 1px solid #E2E8F0; background-color: #F8FAFC; padding: 14px 16px; text-align: left; cursor: pointer; transition: all 0.2s ease;"
-            onmouseover="this.style.borderColor='#D4AF37'; this.style.backgroundColor='#FFFDF8';"
-            onmouseout="this.style.borderColor='#E2E8F0'; this.style.backgroundColor='#F8FAFC';"
-        >
-            <div style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: #FFF8E8; border: 1px solid #F5D998; color: #9B6E16; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;">
-                Superadmin
-            </div>
-            <div style="margin-top: 8px; font-size: 13.5px; color: #0F172A; display: flex; align-items: center;">
-                <span style="font-weight: 700;">admin@admin.com</span>
-                <span style="margin: 0 8px; color: #94A3B8;">·</span>
-                <span style="font-weight: 600; letter-spacing: 0.05em; font-family: monospace;">11223344</span>
-            </div>
-            <div style="margin-top: 4px; font-size: 12px; color: #64748B;">Click to autofill credentials &amp; login</div>
-        </button>
-
-        @php
-            $sampleLawyer = \App\Models\Lawyer::withoutGlobalScopes()->with(['user' => fn($q) => $q->withoutGlobalScopes(), 'firm'])->latest('id')->first();
-        @endphp
-        @if($sampleLawyer && $sampleLawyer->user)
-        <!-- Quick Lawyer Autofill Button -->
-        <button
-            type="button"
-            @click="fill('{{ $sampleLawyer->user->email }}', '11223344')"
-            style="margin-top: 10px; width: 100%; border-radius: 14px; border: 1px solid #E2E8F0; background-color: #F8FAFC; padding: 14px 16px; text-align: left; cursor: pointer; transition: all 0.2s ease;"
-            onmouseover="this.style.borderColor='#38BDF8'; this.style.backgroundColor='#F0F9FF';"
-            onmouseout="this.style.borderColor='#E2E8F0'; this.style.backgroundColor='#F8FAFC';"
-        >
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: #E0F2FE; border: 1px solid #BAE6FD; color: #0369A1; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;">
-                    Counsel / Lawyer ({{ $sampleLawyer->firm?->firm_name ?? 'Firm' }})
+        <!-- Quick Demo Autofill Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" style="margin-top: 22px;">
+            <button
+                type="button"
+                @click="fill('admin@admin.com', '11223344')"
+                style="width: 100%; border-radius: 14px; border: 1px solid #E2E8F0; background-color: #F8FAFC; padding: 13px 14px; text-align: left; cursor: pointer; transition: all 0.2s ease;"
+                onmouseover="this.style.borderColor='#D4AF37'; this.style.backgroundColor='#FFFDF8';"
+                onmouseout="this.style.borderColor='#E2E8F0'; this.style.backgroundColor='#F8FAFC';"
+            >
+                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: #FFF8E8; border: 1px solid #F5D998; color: #9B6E16; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">
+                    Superadmin
                 </div>
-            </div>
-            <div style="margin-top: 8px; font-size: 13.5px; color: #0F172A; display: flex; align-items: center;">
-                <span style="font-weight: 700;">{{ $sampleLawyer->user->email }}</span>
-                <span style="margin: 0 8px; color: #94A3B8;">·</span>
-                <span style="font-weight: 600; letter-spacing: 0.05em; font-family: monospace;">11223344</span>
-            </div>
-            <div style="margin-top: 4px; font-size: 12px; color: #64748B;">Click to autofill {{ $sampleLawyer->displayName() }}'s credentials</div>
-        </button>
-        @endif
+                <div style="margin-top: 8px; font-size: 12.5px; color: #0F172A; font-weight: 700; word-break: break-all;">admin@admin.com</div>
+                <div style="margin-top: 2px; font-size: 11.5px; color: #475569; font-family: monospace;">11223344</div>
+                <div style="margin-top: 4px; font-size: 11px; color: #64748B;">Click to autofill</div>
+            </button>
+
+            <button
+                type="button"
+                @click="fill('firmtest@gmail.com', '11223344')"
+                style="width: 100%; border-radius: 14px; border: 1px solid #E2E8F0; background-color: #F8FAFC; padding: 13px 14px; text-align: left; cursor: pointer; transition: all 0.2s ease;"
+                onmouseover="this.style.borderColor='#128A82'; this.style.backgroundColor='#F2FBFA';"
+                onmouseout="this.style.borderColor='#E2E8F0'; this.style.backgroundColor='#F8FAFC';"
+            >
+                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: #ECFDF5; border: 1px solid #A7F3D0; color: #047857; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">
+                    Firm Admin
+                </div>
+                <div style="margin-top: 8px; font-size: 12.5px; color: #0F172A; font-weight: 700; word-break: break-all;">firmtest@gmail.com</div>
+                <div style="margin-top: 2px; font-size: 11.5px; color: #475569; font-family: monospace;">11223344</div>
+                <div style="margin-top: 4px; font-size: 11px; color: #64748B;">Click to autofill</div>
+            </button>
+        </div>
     </div>
 </x-guest-layout>

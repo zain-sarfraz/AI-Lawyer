@@ -10,6 +10,7 @@ use App\Domain\Firm\PermissionCatalog;
 use App\Enums\UserStatus;
 use App\Models\Client;
 use App\Models\Firm;
+use App\Models\Lawyer;
 use App\Models\StripeWebhookEvent;
 use App\Models\Subscription;
 use App\Models\User;
@@ -534,5 +535,63 @@ class CheckoutAndBillingTest extends TestCase
         // Test 3: settings
         $resSettings = $this->actingAs($user)->get(route('settings.edit'));
         $resSettings->assertOk();
+    }
+
+    public function test_mock_checkout_success_and_status_activate_individual_lawyer_and_create_profile(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'mock.solo@example.com',
+            'account_type' => 'individual',
+            'role' => 'individual_lawyer',
+            'status' => UserStatus::PendingPayment,
+            'firm_id' => null,
+            'pending_plan' => 'starter',
+            'pending_interval' => 'monthly',
+        ]);
+        $user->assignRole('Lawyer');
+
+        $sessionId = 'cs_mock_test1234567890';
+        Subscription::create([
+            'user_id' => $user->id,
+            'firm_id' => null,
+            'plan' => 'starter',
+            'interval' => 'monthly',
+            'stripe_checkout_session_id' => $sessionId,
+            'status' => 'incomplete',
+        ]);
+
+        $response = $this->get(route('checkout.success', ['mock' => 1, 'session_id' => $sessionId]));
+        $response->assertOk();
+
+        $user->refresh();
+        $this->assertEquals(UserStatus::Active, $user->status);
+        $this->assertDatabaseHas('lawyers', [
+            'user_id' => $user->id,
+            'firm_id' => null,
+            'status' => 'active',
+        ]);
+
+        // Status endpoint on a second mock subscription must also confirm cleanly
+        $user2 = User::factory()->create([
+            'email' => 'mock.solo2@example.com',
+            'account_type' => 'individual',
+            'role' => 'individual_lawyer',
+            'status' => UserStatus::PendingPayment,
+            'firm_id' => null,
+        ]);
+        $user2->assignRole('Lawyer');
+        $sessionId2 = 'cs_mock_test0987654321';
+        Subscription::create([
+            'user_id' => $user2->id,
+            'firm_id' => null,
+            'plan' => 'starter',
+            'interval' => 'monthly',
+            'stripe_checkout_session_id' => $sessionId2,
+            'status' => 'incomplete',
+        ]);
+
+        $statusRes = $this->getJson(route('checkout.status', ['mock' => 1, 'session_id' => $sessionId2]));
+        $statusRes->assertOk()->assertJson(['status' => 'confirmed']);
+        $this->assertDatabaseHas('lawyers', ['user_id' => $user2->id]);
     }
 }

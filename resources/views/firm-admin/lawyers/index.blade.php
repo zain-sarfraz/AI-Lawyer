@@ -62,6 +62,7 @@
                         <th>Lawyer</th>
                         <th>Email</th>
                         <th>Phone</th>
+                        <th>Country &amp; Cases</th>
                         <th>Status</th>
                         <th>Date added</th>
                         <th class="text-right">Actions</th>
@@ -91,6 +92,26 @@
                                 @else
                                     <span class="firm-lawyer-phone is-empty">No phone</span>
                                 @endif
+                            </td>
+                            <td>
+                                @php
+                                    $cCode = strtoupper((string) ($member->lawyer?->country ?? ''));
+                                    $cDial = $cCode ? \App\Support\Phone\PhoneNormalizer::dialCode($cCode) : '';
+                                    $jurs = $member->lawyer?->jurisdictions ?? collect();
+                                @endphp
+                                <div class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ $cCode ? ($cCode . ($cDial ? ' (' . $cDial . ')' : '')) : 'Not set' }}
+                                </div>
+                                <div class="mt-1 flex flex-wrap gap-1">
+                                    @forelse ($jurs->take(3) as $jur)
+                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-600 dark:bg-white/10 dark:text-slate-300">{{ $jur->code }}</span>
+                                    @empty
+                                        <span class="text-[11px] text-slate-400">No cases assigned</span>
+                                    @endforelse
+                                    @if ($jurs->count() > 3)
+                                        <span class="text-[11px] text-slate-500">+{{ $jurs->count() - 3 }}</span>
+                                    @endif
+                                </div>
                             </td>
                             <td><x-legal.badge :tone="$statusTone($status)">{{ $status }}</x-legal.badge></td>
                             <td class="firm-lawyer-date">{{ optional($member->created_at)->format('M j, Y') }}</td>

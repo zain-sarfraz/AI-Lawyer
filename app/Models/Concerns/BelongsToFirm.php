@@ -36,6 +36,13 @@ trait BelongsToFirm
                     return;
                 }
 
+                // Platform / Superadmin / solo audit entries may not have a firm context.
+                if ($model instanceof \App\Models\AuditLog && ($existing === null || $existing === '')) {
+                    $model->setAttribute('firm_id', null);
+
+                    return;
+                }
+
                 // Individual accounts intentionally have no firm.
                 $authUser = auth()->user();
                 if ($authUser && ($authUser->account_type === 'individual' || $authUser->role === 'individual_lawyer') && $authUser->firm_id === null) {

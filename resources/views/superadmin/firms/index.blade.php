@@ -627,7 +627,7 @@
                 <thead>
                     <tr>
                         <th style="width: 48px;">#</th>
-                        <th>Firm Name</th>
+                        <th>Firm / Workspace</th>
                         <th>Email</th>
                         <th>Plan &amp; Type</th>
                         <th>Status</th>
@@ -641,15 +641,32 @@
                             $isActive = ($firm->status ?? 'active') === 'active';
                             $rowNum = ($firms->currentPage() - 1) * $firms->perPage() + $index + 1;
                             $planName = ucfirst((string) ($firm->plan ?? 'growth'));
+                            $isIndiv = $firm->isIndividualWorkspace();
+                            $workspaceName = $firm->workspaceDisplayName();
                         @endphp
                         <tr>
                             <td style="color: #64748B; font-weight: 600;">{{ $rowNum }}</td>
-                            <td style="font-weight: 600; color: #0F172A;">{{ $firm->firm_name }}</td>
+                            <td style="font-weight: 600; color: #0F172A;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span>{{ $workspaceName }}</span>
+                                    @if($isIndiv)
+                                        <span style="display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 9999px; font-size: 10px; font-weight: 700; background: #EEF2FF; color: #3730A3;">
+                                            Individual
+                                        </span>
+                                    @endif
+                                </div>
+                            </td>
                             <td style="color: #475569;">{{ $firm->email ?: '—' }}</td>
                             <td>
-                                <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #FEF9C3; color: #854D0E;">
-                                    {{ $planName }} · Law Firm
-                                </span>
+                                @if($isIndiv)
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #EEF2FF; color: #3730A3;">
+                                        {{ $planName }} · Individual Lawyer
+                                    </span>
+                                @else
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #FEF9C3; color: #854D0E;">
+                                        {{ $planName }} · Law Firm
+                                    </span>
+                                @endif
                             </td>
                             <td>
                                 <span class="sa-status-dot-pill {{ $isActive ? 'sa-status-dot-active' : 'sa-status-dot-inactive' }}">

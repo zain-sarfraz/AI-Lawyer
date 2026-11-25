@@ -1,6 +1,13 @@
 @php
     $idPrefix = $idPrefix ?? 'service';
     $selectedLawyers = $selectedLawyers ?? [];
+    $lawyers = $lawyers ?? collect();
+    $defaultChecked = (! $service->exists && $lawyers->count() === 1)
+        ? $lawyers->pluck('id')->all()
+        : $selectedLawyers;
+    $checkedLawyers = old('_modal') === ($modalName ?? '')
+        ? array_map('intval', (array) old('lawyer_ids', $defaultChecked))
+        : array_map('intval', (array) $defaultChecked);
 @endphp
 
 <input type="hidden" name="_modal" value="{{ $modalName ?? '' }}">
@@ -48,5 +55,24 @@
                 <option value="inactive" @selected(old('status', $service->status?->value) === 'inactive')>Inactive</option>
             </select>
         </div>
+        @if($lawyers->isNotEmpty())
+            <div class="col-12">
+                <label class="ui-label">Assigned lawyers</label>
+                <div class="d-flex flex-wrap gap-3 pt-1">
+                    @foreach($lawyers as $lawyer)
+                        <label class="ui-check">
+                            <input
+                                type="checkbox"
+                                class="ui-check-input"
+                                name="lawyer_ids[]"
+                                value="{{ $lawyer->id }}"
+                                @checked(in_array((int) $lawyer->id, $checkedLawyers, true))
+                            >
+                            <span>{{ $lawyer->displayName() }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 </div>

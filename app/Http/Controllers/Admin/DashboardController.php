@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Integrations\FineTunerService;
+use App\Domain\Scheduling\FirmTime;
 use App\Enums\AppointmentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
@@ -36,13 +37,17 @@ class DashboardController extends Controller
             return $this->teamDashboard($user, $partOfDay, $firmShort);
         }
 
-        $today = now()->toDateString();
+        $firmTime = app(FirmTime::class);
+        $firm = $user?->firm;
+        $localNow = $firmTime->now($firm);
+        $today = $localNow->toDateString();
+        $todayBounds = $firmTime->utcDayBounds($today, $firm);
         $firmId = (int) ($user?->firm_id ?? 0);
 
-        $stats = Cache::remember("dashboard.stats.{$firmId}.{$today}", 30, function () use ($today) {
+        $stats = Cache::remember("dashboard.stats.{$firmId}.{$today}", 30, function () use ($today, $todayBounds) {
             return [
                 'leads_today' => Lead::query()->whereDate('created_at', $today)->count(),
-                'appointments_today' => Appointment::query()->whereDate('start_at', $today)->blocking()->count(),
+                'appointments_today' => Appointment::query()->whereBetween('start_at', $todayBounds)->blocking()->count(),
                 'calls_today' => Call::query()->whereDate('started_at', $today)->count(),
                 'ai_bookings' => Appointment::query()
                     ->whereDate('created_at', $today)
@@ -62,8 +67,8 @@ class DashboardController extends Controller
             'greeting' => "{$partOfDay}, {$firmShort}.",
             'stats' => $stats,
             'todaysAppointments' => Appointment::query()
-                ->with(['lawyer.user', 'service', 'lead', 'client'])
-                ->whereDate('start_at', $today)
+                ->with(['firm', 'lawyer.user', 'service', 'lead', 'client'])
+                ->whereBetween('start_at', $todayBounds)
                 ->whereIn('status', AppointmentStatus::blockingValues())
                 ->latest('id')
                 ->limit(8)
@@ -77,8 +82,14 @@ class DashboardController extends Controller
 
     private function teamDashboard($user, string $partOfDay, string $firmShort): View
     {
+        $firmTime = app(FirmTime::class);
+        $firm = $user?->firm;
+        $localNow = $firmTime->now($firm);
+        $todayDate = $localNow->toDateString();
+        $todayBounds = $firmTime->utcDayBounds($todayDate, $firm);
+
         $upcoming = Appointment::query()
-            ->with(['lawyer.user', 'client', 'lead', 'service', 'appointmentType'])
+            ->with(['firm', 'lawyer.user', 'client', 'lead', 'service', 'appointmentType'])
             ->where('start_at', '>=', now()->subHour())
             ->whereIn('status', AppointmentStatus::blockingValues())
             ->latest('id')
@@ -86,7 +97,7 @@ class DashboardController extends Controller
             ->get();
 
         $todayCount = Appointment::query()
-            ->whereDate('start_at', now()->toDateString())
+            ->whereBetween('start_at', $todayBounds)
             ->whereIn('status', AppointmentStatus::blockingValues())
             ->count();
 
@@ -96,8 +107,7 @@ class DashboardController extends Controller
 
         $nextAppointment = $upcoming->first();
 
-        $startOfWeek = now()->startOfWeek();
-        $todayDate = now()->toDateString();
+        $startOfWeek = $localNow->copy()->startOfWeek();
         $weekDays = collect(range(0, 6))->map(function ($dayOffset) use ($startOfWeek, $todayDate) {
             $d = (clone $startOfWeek)->addDays($dayOffset);
 
@@ -112,7 +122,8 @@ class DashboardController extends Controller
         return view('admin.dashboard-user', [
             'greeting' => "{$partOfDay}, {$user->name}.",
             'firmShort' => $firmShort,
-            'roleLabel' => $user->getRoleNames()->first() ?: 'Team',
+            'isIndividual' => $user->isIndividual(),
+            'roleLabel' => $user->displayRoleLabel(),
             'upcomingAppointments' => $upcoming,
             'nextAppointment' => $nextAppointment,
             'weekDays' => $weekDays,
